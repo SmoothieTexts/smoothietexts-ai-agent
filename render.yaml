@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: smoothie-ai-backend
+    env: python
+    buildCommand: ""
+    startCommand: uvicorn chatbot_api:app --host 0.0.0.0 --port 10000
+    envVars:
+      - key: SUPABASE_URL
+        value: https://qanifywagjgqpzqhnqxs.supabase.co
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFhbmlmeXdhZ2pncXB6cWhucXhzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MDI2MTgyMSwiZXhwIjoyMDY1ODM3ODIxfQ.iW_0KgBIHB-Rh-qnB1trNqq6nK5dYr-cbgYx7JKrQs8
+      - key: SUPABASE_TABLE_NAME
+        value: smoothietexts_ai
