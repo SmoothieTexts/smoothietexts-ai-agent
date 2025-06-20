@@ -1,56 +1,56 @@
-# chatbot_api.py  – Xalvis backend (STRICT KB logic + env-debug)
+# chatbot_api.py – Xalvis backend (STRICT KB logic + env-debug, SDK v1)
 
 import os, ast, re, traceback, numpy as np
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from supabase import create_client
-import openai
+from openai import OpenAI                           # ← NEW import
 
 # ── 1. Secrets & clients ──────────────────────────────────────────────────
-load_dotenv()                                           # load .env if present
+load_dotenv()
 
-openai.api_key   = os.getenv("OPENAI_API_KEY")
-SUPABASE_URL     = os.getenv("SUPABASE_URL")
-SUPABASE_KEY     = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-TABLE_NAME       = os.getenv("SUPABASE_TABLE_NAME") or "smoothietexts_ai"
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+SUPABASE_URL   = os.getenv("SUPABASE_URL")
+SUPABASE_KEY   = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+TABLE_NAME     = os.getenv("SUPABASE_TABLE_NAME") or "smoothietexts_ai"
 
 def _mask(val: str | None) -> str:
-    """Return a partially-masked version for safe logging."""
     if not val:
         return "❌ NONE"
     return val[:4] + "…(hidden)…" + val[-4:]
 
 print("🔧 ENV CHECK ─────────────────────────────")
-print("OPENAI_API_KEY     :", _mask(openai.api_key))
+print("OPENAI_API_KEY     :", _mask(OPENAI_API_KEY))
 print("SUPABASE_URL       :", SUPABASE_URL or "❌ NONE")
 print("SUPABASE_ROLE_KEY  :", _mask(SUPABASE_KEY))
 print("TABLE_NAME         :", TABLE_NAME)
 print("──────────────────────────────────────────")
 
-if not (openai.api_key and SUPABASE_URL and SUPABASE_KEY):
+if not (OPENAI_API_KEY and SUPABASE_URL and SUPABASE_KEY):
     raise RuntimeError("❌ One or more critical env vars are missing!")
 
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+client    = OpenAI(api_key=OPENAI_API_KEY)          # ← NEW client
+supabase  = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # ── 2. Embedding helpers ────────────────────────────────────────────────
 def get_embedding(text: str) -> list[float]:
-    """Return ADA-002 embedding for the text."""
-    return openai.Embedding.create(
-        input=[text],
-        model="text-embedding-ada-002"
-    )["data"][0]["embedding"]
+    """Return ADA-002 embedding for the text (SDK v1)."""
+    resp = client.embeddings.create(
+        model="text-embedding-ada-002",
+        input=[text]
+    )
+    return resp.data[0].embedding                   # ← NEW access pattern
 
 def cosine(a, b):
     a, b = np.array(a), np.array(b)
     return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))
 
-SIM_THRESHOLD = 0.60         # similarity cut-off
+SIM_THRESHOLD = 0.60
 
 def fetch_best_match(q: str) -> tuple[str, float]:
     q_emb = get_embedding(q)
     rows  = supabase.table(TABLE_NAME).select("*").execute().data or []
-
     best_txt, best_score = "", -1
     for r in rows:
         emb = r["embedding"]
@@ -71,7 +71,7 @@ def is_greeting(txt: str) -> bool:
 
 # ── 4. Main answer routine ──────────────────────────────────────────────
 def answer(user_q: str) -> str:
-    # 1️⃣  Try knowledge-base
+    # 1️⃣  Knowledge-base first
     context, score = fetch_best_match(user_q)
     if score >= SIM_THRESHOLD:
         prompt = (
@@ -80,15 +80,15 @@ def answer(user_q: str) -> str:
             f"Knowledge:\n{context}\n\n"
             f"User Question: {user_q}\nAnswer:"
         )
-        resp = openai.ChatCompletion.create(
+        resp = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": prompt}]
         )
         return resp.choices[0].message.content.strip()
 
-    # 2️⃣  Greetings → brief chat reply
+    # 2️⃣  Greetings → short friendly reply
     if is_greeting(user_q):
-        resp = openai.ChatCompletion.create(
+        resp = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system",
@@ -99,12 +99,12 @@ def answer(user_q: str) -> str:
         )
         return resp.choices[0].message.content.strip()
 
-    # 3️⃣  Otherwise point user to support
+    # 3️⃣  Otherwise point to support
     return ("I couldn’t find that in my knowledge base. "
             "Please visit our support page for help: "
             "https://www.smoothietexts.com/contact-us/")
 
-# ── 5. FastAPI app ──────────────────────────────────────────────────────
+# ── 5. FastAPI server ──────────────────────────────────────────────────
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
@@ -123,8 +123,7 @@ async def chat(req: Request):
 
     try:
         return {"answer": answer(user_q)}
-    except Exception as e:
-        # full traceback to Render logs for easy debugging
+    except Exception:
         print("❌ CRASH in /chat ————————————————")
         traceback.print_exc()
         print("———————————————————————————————————")
