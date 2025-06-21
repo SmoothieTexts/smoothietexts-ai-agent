@@ -29,7 +29,7 @@ def _mask(s: str | None) -> str:
 print("🔧 ENV CHECK →",
       "OPENAI", _mask(OPENAI_API_KEY),
       "| SUPABASE_URL", SUPABASE_URL or "❌",
-      "| TABLE", TABLE_NAME
+      "| TABLE", TABLE_NAME,
       "| TOKEN", _mask(API_TOKEN)) 
 
 if not (OPENAI_API_KEY and SUPABASE_URL and SUPABASE_KEY):
