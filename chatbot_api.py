@@ -20,6 +20,8 @@ OPENAI_API_KEY  = os.getenv("OPENAI_API_KEY")
 SUPABASE_URL    = os.getenv("SUPABASE_URL")
 SUPABASE_KEY    = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 TABLE_NAME      = os.getenv("SUPABASE_TABLE_NAME") or "smoothietexts_ai"
+# 🔐 NEW: shared secret the frontend must send
+API_TOKEN       = os.getenv("API_TOKEN")
 
 def _mask(s: str | None) -> str:
     return f"{s[:4]}…{s[-4:]}" if s else "❌ NONE"
@@ -27,7 +29,8 @@ def _mask(s: str | None) -> str:
 print("🔧 ENV CHECK →",
       "OPENAI", _mask(OPENAI_API_KEY),
       "| SUPABASE_URL", SUPABASE_URL or "❌",
-      "| TABLE", TABLE_NAME)
+      "| TABLE", TABLE_NAME
+      "| TOKEN", _mask(API_TOKEN)) 
 
 if not (OPENAI_API_KEY and SUPABASE_URL and SUPABASE_KEY):
     raise RuntimeError("❌ Critical env-vars missing – aborting boot!")
@@ -143,6 +146,10 @@ async def options_chat():
 # Main chat endpoint
 @app.post("/chat")
 async def chat(req: Request):
+payload = await req.json()
+    if payload.get("token") != API_TOKEN:
+        raise HTTPException(401, "Unauthorized – bad token")
+
     client_ip = req.client.host or "unknown"
     if rate_limited(client_ip):
         raise HTTPException(429, "Too many requests – please slow down.")
