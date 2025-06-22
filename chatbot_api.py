@@ -1,8 +1,9 @@
 # ─────────────────────────────────────────────────────────────────────────────
-#  chatbot_api.py – Xalvis backend (STRICT KB logic + security hardening)
+#  chatbot_api.py – Xalvis backend (STRICT KB logic + token + Supabase logging)
 # ─────────────────────────────────────────────────────────────────────────────
 import os, ast, re, time, traceback, collections
 from typing import List, Tuple
+import datetime                                   # ← NEW (for readable timestamp)
 
 import numpy as np
 from fastapi import FastAPI, Request, HTTPException
@@ -10,23 +11,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from supabase import create_client
-from openai import OpenAI                              # SDK v1
+from openai import OpenAI                          # SDK v1
 # ─────────────────────────────────────────────────────────────────────────────
 
 # 1. ENV & CLIENTS ───────────────────────────────────────────────────────────
 load_dotenv()
 
-OPENAI_API_KEY  = os.getenv("OPENAI_API_KEY")
-SUPABASE_URL    = os.getenv("SUPABASE_URL")
-SUPABASE_KEY    = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-TABLE_NAME      = os.getenv("SUPABASE_TABLE_NAME") or "smoothietexts_ai"
-API_TOKEN       = os.getenv("API_TOKEN")  # 👈 Secure token
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+SUPABASE_URL   = os.getenv("SUPABASE_URL")
+SUPABASE_KEY   = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+TABLE_NAME     = os.getenv("SUPABASE_TABLE_NAME") or "smoothietexts_ai"
+API_TOKEN      = os.getenv("API_TOKEN")            # 👈 secure token
 
-def _mask(s: str | None) -> str:
-    return f"{s[:4]}…{s[-4:]}" if s else "❌ NONE"
-
-print("🔧 ENV CHECK →",
-      "OPENAI", _mask(OPENAI_API_KEY),
+def _mask(s: str | None) -> str: return f"{s[:4]}…{s[-4:]}" if s else "❌ NONE"
+print("🔧 ENV →", "OPENAI", _mask(OPENAI_API_KEY),
       "| SUPABASE_URL", SUPABASE_URL or "❌",
       "| TABLE", TABLE_NAME,
       "| TOKEN", _mask(API_TOKEN))
@@ -37,7 +35,7 @@ if not (OPENAI_API_KEY and SUPABASE_URL and SUPABASE_KEY):
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
 supabase      = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# 2. EMBEDDINGS & SIMILARITY ────────────────────────────────────────────────
+# 2. EMBEDDINGS / SIMILARITY ────────────────────────────────────────────────
 def get_embedding(text: str) -> List[float]:
     emb = openai_client.embeddings.create(
         model="text-embedding-ada-002",
@@ -52,8 +50,8 @@ def cosine(a: List[float], b: List[float]) -> float:
 SIM_THRESHOLD = 0.60
 
 def fetch_best_match(q: str) -> Tuple[str, float]:
-    q_emb   = get_embedding(q)
-    rows    = supabase.table(TABLE_NAME).select("*").execute().data or []
+    q_emb = get_embedding(q)
+    rows  = supabase.table(TABLE_NAME).select("*").execute().data or []
     best, best_score = "", -1.0
     for r in rows:
         emb = ast.literal_eval(r["embedding"]) if isinstance(r["embedding"], str) else r["embedding"]
@@ -64,26 +62,18 @@ def fetch_best_match(q: str) -> Tuple[str, float]:
 
 # 3. GREETING DETECTOR ───────────────────────────────────────────────────────
 GREETING_RE = re.compile(
-    r"\b(hi|hello|hey|howdy|good\s?(morning|afternoon|evening)|what'?s up)\b",
-    re.I
+    r"\b(hi|hello|hey|howdy|good\s?(morning|afternoon|evening)|what'?s up)\b", re.I
 )
-def is_greeting(t: str) -> bool:
-    return bool(GREETING_RE.search(t.strip()))
+def is_greeting(t: str) -> bool: return bool(GREETING_RE.search(t.strip()))
 
-# 4. ULTRA-LIGHT RATE LIMIT (in-memory) ──────────────────────────────────────
-RATE_LIMIT  = 30
-RATE_PERIOD = 60
+# 4. ULTRA-LIGHT RATE LIMIT ─────────────────────────────────────────────────
+RATE_LIMIT, RATE_PERIOD = 30, 60     # 30 req / 60 s
 _ip_hits: dict[str, collections.deque] = {}
-
 def rate_limited(ip: str) -> bool:
-    now    = time.time()
-    bucket = _ip_hits.setdefault(ip, collections.deque())
-    while bucket and now - bucket[0] > RATE_PERIOD:
-        bucket.popleft()
-    if len(bucket) >= RATE_LIMIT:
-        return True
-    bucket.append(now)
-    return False
+    now, bucket = time.time(), _ip_hits.setdefault(ip, collections.deque())
+    while bucket and now - bucket[0] > RATE_PERIOD: bucket.popleft()
+    if len(bucket) >= RATE_LIMIT: return True
+    bucket.append(now); return False
 
 # 5. ANSWER PIPELINE ─────────────────────────────────────────────────────────
 def answer(user_q: str) -> str:
@@ -92,26 +82,22 @@ def answer(user_q: str) -> str:
         prompt = (
             "You are Xalvis, the friendly AI agent for SmoothieTexts.\n"
             "Answer ONLY with the information in the Knowledge below.\n\n"
-            f"Knowledge:\n{ctx}\n\n"
-            f"User Question: {user_q}\nAnswer:"
+            f"Knowledge:\n{ctx}\n\nUser Question: {user_q}\nAnswer:"
         )
         chat = openai_client.chat.completions.create(
             model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}]
-        )
-        return chat.choices[0].message.content.strip()
+            messages=[{"role":"user","content":prompt}]
+        );  return chat.choices[0].message.content.strip()
 
     if is_greeting(user_q):
         chat = openai_client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system",
-                 "content": "You are Xalvis, a warm, concise AI assistant for SmoothieTexts. "
-                            "Respond with a short friendly greeting."},
-                {"role": "user", "content": user_q}
+                {"role":"system",
+                 "content":"You are Xalvis, a warm, concise AI assistant for SmoothieTexts. Respond with a short friendly greeting."},
+                {"role":"user","content":user_q}
             ]
-        )
-        return chat.choices[0].message.content.strip()
+        );  return chat.choices[0].message.content.strip()
 
     return ("I couldn’t find that in my knowledge base. "
             "Please visit our support page for help: "
@@ -119,42 +105,50 @@ def answer(user_q: str) -> str:
 
 # 6. FASTAPI APP ─────────────────────────────────────────────────────────────
 app = FastAPI()
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["https://www.smoothietexts.com"],
     allow_credentials=True,
-    allow_methods=["POST", "OPTIONS"],
+    allow_methods=["POST","OPTIONS"],
     allow_headers=["Content-Type"],
 )
 
 @app.get("/")
-def root():
-    return {"status": "Xalvis backend running"}
+def root(): return {"status":"Xalvis backend running"}
 
 @app.options("/chat")
-async def options_chat():
-    return JSONResponse(content={}, status_code=204)
+async def options_chat(): return JSONResponse(content={}, status_code=204)
 
 @app.post("/chat")
 async def chat(req: Request):
     payload = await req.json()
 
-    # ✅ Token check added here
+    # 🔒 Token check
     if payload.get("token") != API_TOKEN:
         raise HTTPException(401, "Unauthorized – bad token")
 
     client_ip = req.client.host or "unknown"
     if rate_limited(client_ip):
-        raise HTTPException(429, "Too many requests – please slow down.")
+        raise HTTPException(429, "Too many requests – slow down.")
 
-    user_q = str(payload.get("question", "")).strip()
+    user_q = str(payload.get("question","")).strip()
     if not user_q:
-        return {"answer": "Please type a question 🙂"}
+        return {"answer":"Please type a question 🙂"}
 
     try:
-        return {"answer": answer(user_q)}
+        bot_answer = answer(user_q)
+
+        # ── NEW 4-LINE INSERT INTO chat_logs ───────────────────────────────
+        supabase.table("chat_logs").insert({
+            "question"   : user_q,
+            "answer"     : bot_answer,
+            "timestamp"  : datetime.datetime.utcnow().isoformat(),  # UTC ISO-string
+            "ip_address" : client_ip
+        }).execute()
+        # -------------------------------------------------------------------
+
+        return {"answer": bot_answer}
+
     except Exception:
-        print("❌ CRASH in /chat")
-        traceback.print_exc()
-        return {"answer": "Sorry, something went wrong. Please try again later."}
+        print("❌ CRASH in /chat"); traceback.print_exc()
+        return {"answer":"Sorry, something went wrong. Please try again later."}
