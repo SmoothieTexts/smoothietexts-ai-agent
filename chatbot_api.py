@@ -108,12 +108,12 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["https://www.smoothietexts.com"],
     allow_credentials=True,
-    allow_methods=["POST","OPTIONS"],
+    allow_methods=["POST", "OPTIONS"],
     allow_headers=["Content-Type"],
 )
 
 @app.get("/")
-def root(): return {"status":"Xalvis backend running"}
+def root(): return {"status": "Xalvis backend running"}
 
 @app.options("/chat")
 async def options_chat(): return JSONResponse(content={}, status_code=204)
@@ -129,21 +129,20 @@ async def chat(req: Request):
     if rate_limited(client_ip):
         raise HTTPException(429, "Too many requests – slow down.")
 
-    user_q = str(payload.get("question","")).strip()
+    user_q = str(payload.get("question", "")).strip()
     if not user_q:
-        return {"answer":"Please type a question 🙂"}
+        return {"answer": "Please type a question 🙂"}
 
     try:
         bot_answer = answer(user_q)
         return {"answer": bot_answer}
 
     except Exception:
-        print("❌ CRASH in /chat"); traceback.print_exc()
-        return {"answer":"Sorry, something went wrong. Please try again later."}
+        print("❌ CRASH in /chat")
+        traceback.print_exc()
+        return {"answer": "Sorry, something went wrong. Please try again later."}
 
-# ─────────────────────────────────────────────────────────────────────────────
-# NEW: Chat summary endpoint to save { name, email, chat_log } to Supabase
-# ─────────────────────────────────────────────────────────────────────────────
+# 7. CHAT SUMMARY ENDPOINT ───────────────────────────────────────────────────
 @app.post("/summary")
 async def save_chat_summary(req: Request):
     try:
@@ -168,6 +167,7 @@ async def save_chat_summary(req: Request):
 
         return {"status": "Chat summary saved."}
 
-    except Exception as e:
-        print("❌ CRASH in /summary"); traceback.print_exc()
+    except Exception:
+        print("❌ CRASH in /summary")
+        traceback.print_exc()
         return JSONResponse(status_code=500, content={"error": "Internal error"})
