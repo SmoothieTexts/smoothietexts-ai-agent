@@ -3,8 +3,8 @@
 
 (function () {
   const DEFAULT_CLIENT_ID = "default";
-  const BASE_CONFIG_URL  = "https://two47convo.onrender.com/static";
-  const API_BASE         = "https://two47convobot.onrender.com";
+  const BASE_CONFIG_URL  = "https://two47ctest.onrender.com/static";
+  const API_BASE         = "https://two47cbackend.onrender.com";
 
   function linkify(text) {
     return text.replace(/(https?:\/\/[^\s]+)/g, url => `<a href="${url}" target="_blank" rel="noopener">${url}</a>`);
