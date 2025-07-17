@@ -17,6 +17,33 @@ window.__247CONVO_CONFIG__ = {
   token: "247convobot-2025",
   client_id: "therichjoe",
   meetingDuration: "30",
+  // === 1. Personalized Greetings ===
+  "greetingTextMorning": "Good morning!",
+  "greetingTextAfternoon": "Good afternoon!",
+  "greetingTextEvening": "Good evening!",
+  "greetingIntro": "What’s your name?",       // Used after greeting for first-time users
+  "askEmail": "Now, what’s your email?",      // After name
+  
+  // === 2. Proactive Messages ===
+  "proactive": {
+    "timeOnPage": "How can I help you today?",
+    "exitIntent": "Leaving already? Any last questions?",
+    "scrollDepth": "Questions so far? Ask me!"
+  },
+
+  // === 3. Rating Widget ===
+  "ratingPrompt": "How would you rate this experience?",
+  "ratingThanks": "Thank you for your feedback!",
+  "ratingError": "⚠️ Couldn't send your rating.",
+
+  // === 4. Memory & History ===
+  "memoryLimit": 5,      // Number of Q&A turns to remember per session
+
+  // === 5. Handoff (for human agent transfer) ===
+  "handoff": {
+    "intro": "Connecting you to a human agent...",
+    "whatsapp": "<a href='https://wa.me/234XXXXXXXXXX'>Chat with us on WhatsApp</a>"
+  },
 
   // ─── NEW: which provider to use for booking ("zoom", "google", or "microsoft")
   bookingProvider: "google",

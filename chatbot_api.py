@@ -123,9 +123,26 @@ def rate_limited(ip: str) -> bool:
     bucket.append(now_ts)
     return False
 
-def answer(user_q: str, client_id: str, cfg: dict, oa: OpenAI) -> str:
+def answer(user_q: str, client_id: str, cfg: dict, oa: OpenAI, history: list = None, booking: dict = None) -> str:
     ctx, score = fetch_best_match(user_q, client_id, oa)
+    history = history or []
+    booking = booking or {}
+
+    # Proactive booking interruption
+    if booking.get("inProgress") and not any(
+        kw in user_q.lower()
+        for kw in ["book", "booking", "appointment", "meeting", "schedule", "continue", "confirm", "cancel"]
+    ):
+        # User has a booking in progress but is asking about something else
+        return (
+            "🕒 You have a booking in progress"
+            f"{' for ' + str(booking.get('date')) if booking.get('date') else ''}"
+            f"{' at ' + str(booking.get('time')) if booking.get('time') else ''}.<br>"
+            "Would you like to continue your booking or start over? (Type 'continue' or 'start over')"
+        )
+
     if score >= SIM_THRESHOLD:
+        # If knowledge base match, just answer with KB context
         prompt = f"You are {cfg.get('chatbotName','Chatbot')}. Answer using ONLY this knowledge:\n\n{ctx}\n\nQ: {user_q}\nA:"
         res = oa.chat.completions.create(
             model="gpt-3.5-turbo",
@@ -141,7 +158,30 @@ def answer(user_q: str, client_id: str, cfg: dict, oa: OpenAI) -> str:
             ]
         )
         return res.choices[0].message.content.strip()
-    return f"Sorry, I couldn’t find that. Visit {cfg.get('supportUrl','#')}"
+    # --- NEW: Use conversation history for context-aware prompt ---
+    # Build prompt from history (max 5 most recent)
+    # --- Use booking context + conversation history ---
+    booking_context = ""
+    if booking.get("inProgress"):
+        booking_context = (
+            f"NOTE: The user is currently booking for {booking.get('date', 'unknown date')} at "
+            f"{booking.get('time', 'unknown time')}. Respond accordingly.\n"
+        )
+
+    prompt = booking_context  # <<-- Always at the top of the prompt!
+    for turn in (history[-5:] if len(history) > 5 else history):
+        user = turn.get("user", "")
+        bot  = turn.get("bot", "")
+        prompt += f"User: {user}\nBot: {bot}\n"
+    prompt += f"User: {user_q}\nBot:"
+    try:
+        res = oa.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return res.choices[0].message.content.strip()
+    except Exception:
+        return "Sorry, there was a problem understanding your last message."
 
 def get_google_credentials_from_env(client_id):
     key = f"GOOGLE_OAUTH_TOKEN_{client_id.upper().replace('-', '_')}"
@@ -216,10 +256,14 @@ async def chat(req: Request):
     if not q:
         return {"answer": "Please ask a question 🙂"}
 
+    # NEW: Get optional conversation history
+    history = p.get("history", [])   # Array of {user, bot} dicts
+    booking = p.get("booking", {})   # <-- Add this line to receive booking info
+
     cfg = fetch_config(cid)
     oa  = get_openai_client(cid)
     try:
-        ans = answer(q, cid, cfg, oa)
+        ans = answer(q, cid, cfg, oa, history, booking)
         return {"answer": ans}
     except Exception:
         traceback.print_exc()
@@ -529,6 +573,30 @@ async def summary(req: Request):
         "timestamp": datetime.datetime.utcnow().isoformat()
     }).execute()
     return {"status": "saved"}
+
+@app.post("/rating")
+async def rating(req: Request):
+    p = await req.json()
+    client_id = p.get("client_id")
+    name = p.get("name")
+    email = p.get("email")
+    score = p.get("score")
+    context = p.get("context", [])
+    created = datetime.datetime.utcnow().isoformat()
+    # Insert into chat_ratings table (your schema)
+    try:
+        supabase.table("chat_ratings").insert({
+            "client_id": client_id,
+            "name": name,
+            "email": email,
+            "score": int(score) if score else None,
+            "context": json.dumps(context),  # Store as JSONB
+            "created_at": created
+        }).execute()
+        return {"status": "ok"}
+    except Exception as e:
+        return JSONResponse({"error": f"Could not save rating: {str(e)}"}, status_code=500)
+
 
 @app.get("/configs/{client_id}.json")
 async def get_config_file(client_id: str):

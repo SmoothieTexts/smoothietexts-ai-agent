@@ -36,6 +36,17 @@
     };
   }
 
+  // ... existing utility functions above ...
+  function getErrorMsg(err) {
+    if (!err) return "Unknown error";
+    if (typeof err === "string") return err;
+    if (err.error && typeof err.error === "string") return err.error;
+    if (err.message && typeof err.message === "string") return err.message;
+    if (err.detail && typeof err.detail === "string") return err.detail;
+    if (err.error && typeof err.error === "object") return getErrorMsg(err.error);
+    return JSON.stringify(err);
+  }
+
   async function run() {
     const client_id = getClientID();
     const config = window.__247CONVO_CONFIG__ || await loadConfig(client_id);
@@ -70,6 +81,60 @@
     let collecting    = "name";
     let bookingState  = { inProgress: false, date: null, time: null };
 
+let conversationHistory = []; // NEW: For memory
+
+function updateConversationHistory(user, bot) {
+  conversationHistory.push({ user, bot });
+  if (conversationHistory.length > (config.memoryLimit || 5)) conversationHistory.shift();
+}
+
+function insertRatingWidget() {
+  const old = document.getElementById('chatRatingWidget');
+  if (old) old.remove();
+  const div = document.createElement('div');
+  div.id = "chatRatingWidget";
+  div.style = "margin:1em 0;text-align:center;";
+  let html = `<div style="font-size:1.1em;margin-bottom:4px;">${config.ratingPrompt || "How would you rate this experience?"}</div>`;
+  for (let i = 1; i <= 5; i++) {
+    html += `<button data-rate="${i}" style="font-size:2em;cursor:pointer;border:none;background:none;">⭐️</button>`;
+  }
+  div.innerHTML = html;
+  chatBox.appendChild(div);
+
+  div.querySelectorAll('button[data-rate]').forEach(btn => {
+    btn.onclick = async (e) => {
+      const score = e.target.getAttribute("data-rate");
+      div.innerHTML = `${config.ratingThanks || "Thank you for your feedback!"}`;
+      try {
+        await fetch(`${API_BASE}/rating`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            client_id,
+            user: userName || "",
+            email: userEmail || "",
+            score,
+            context: conversationHistory,
+          })
+        });
+      } catch (err) {
+        showMessage(`${config.ratingError || "⚠️ Couldn't send your rating."}`);
+      }
+    };
+  });
+  chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+function getPersonalizedGreeting() {
+  let greet = config.greetingTextMorning || "Good morning!";
+  const hour = new Date().getHours();
+  if (hour >= 12 && hour < 18) greet = config.greetingTextAfternoon || "Good afternoon!";
+  if (hour >= 18) greet = config.greetingTextEvening || "Good evening!";
+  if (userName) greet += ` ${userName}`;
+  return greet;
+}
+
+
     // Branding setup
     if (header) header.innerText = `${brandName} Assistant`;
     if (avatar && avatarUrl) avatar.style.backgroundImage = `url('${avatarUrl}')`;
@@ -77,23 +142,31 @@
     if (tooltip) tooltip.innerText = `Need help? Ask ${chatbotName}.`;
     // document.title = `${brandName} Chat`;
 
-    function showMessage(text, isUser = false, isTyping = false, id = "") {
-      if (!chatBox) return;
-      const cls = isUser ? "user" : "bot";
-      const avatarHTML = (!isUser && avatarUrl) ? `<div class="bot-avatar" style="background-image:url('${avatarUrl}')"></div>` : "";
-      const typingHTML = isTyping ? `<span class="typing"><span></span><span></span><span></span></span>` : "";
-      const tsHTML = !isTyping ? `<span class="timestamp">${now()}</span>` : "";
-      const wrapperID = id ? `id="${id}-wrapper"` : "";
-      const bubbleID  = id ? `id="${id}"` : "";
+function showMessage(text, isUser = false, isTyping = false, id = "", isError = false) {
+  if (!chatBox) return;
+  const cls = isUser ? "user" : "bot";
+  const errorClass = isError ? "error" : "";
+  const avatarHTML = (!isUser && avatarUrl)
+    ? `<div class="bot-avatar" style="background-image:url('${avatarUrl}')"></div>`
+    : (!isUser ? `<div class="bot-avatar default-avatar"></div>` : "");
+  const typingHTML = isTyping ? `<span class="typing"><span></span><span></span><span></span></span>` : "";
+  const tsHTML = !isTyping ? `<span class="timestamp">${now()}</span>` : "";
+  const wrapperID = id ? `id="${id}-wrapper"` : "";
+  const bubbleID  = id ? `id="${id}"` : "";
 
-      chatBox.insertAdjacentHTML("beforeend", `
-        <div class="msg-wrapper ${cls}" ${wrapperID}>
-          ${avatarHTML}
-          <p class="${cls}" ${bubbleID}>${text}${typingHTML}${tsHTML}</p>
-        </div>
-      `);
-      chatBox.scrollTop = chatBox.scrollHeight;
-    }
+  chatBox.insertAdjacentHTML("beforeend", `
+    <div class="msg-wrapper ${cls} new" ${wrapperID}>
+      ${avatarHTML}
+      <p class="${cls} ${errorClass}" ${bubbleID}>${text}${typingHTML}${tsHTML}</p>
+    </div>
+  `);
+  chatBox.scrollTop = chatBox.scrollHeight;
+  setTimeout(() => {
+    const last = chatBox.querySelector(".msg-wrapper.new");
+    if (last) last.classList.remove("new");
+  }, 600);
+}
+
 
     function insertQuickOptions() {
       if (!chatBox) return;
@@ -406,10 +479,12 @@ if (!res.ok) {
   let err = {}, msg = "Unknown error";
   try {
     err = await res.json();
-    msg = err.error || err.message || err.detail || "Unknown error";
+    msg = getErrorMsg(err);     // <-- changed line
   } catch (e) {
     msg = await res.text() || "Unknown error";
   }
+  // ... rest unchanged
+
 
   // Clean up ugly error objects if backend returns JSON as a string
   if (typeof msg === "string") {
@@ -421,7 +496,7 @@ if (!res.ok) {
   // 🧠 Check for suggested time (e.g. backend gives next available)
   if (err && typeof err === "object" && err.suggested) {
     const suggestedDate = new Date(err.suggested);
-    showMessage(`⚠️ ${msg}`);
+    showMessage(`⚠️ ${msg}`, false, false, "", true);
     showMessage(`📅 Next available time: ${suggestedDate.toLocaleString()} — Want to book this instead? (yes / no)`);
     const retry = await waitForUserInput();
     userInput.value = "";
@@ -501,9 +576,10 @@ if (!res.ok) {
   showMessage(`✅ Your appointment is booked for ${parsed.toLocaleString()}!\n${linkify(confirmation_link)}`);
   showMessage("Anything else I can help you with?");
   insertQuickOptions();
+insertRatingWidget();
 
 } catch (error) {
-  showMessage("⚠️ Couldn’t complete booking. Please try again.");
+  showMessage("⚠️ Couldn’t complete booking. Please try again.", false, false, "", true);
 }
 // THIS BRACE BELOW is critical! It closes startBookingFlow
 } 
@@ -548,11 +624,11 @@ if (!res.ok) {
   let msg = "Unknown error";
   try {
     const err = await res.json();
-    msg = err.error || err.message || err.detail || "Unknown error";
+    msg = getErrorMsg(err);   // <-- changed line
   } catch (e) {
     msg = await res.text() || "Unknown error";
   }
-  return showMessage(`⚠️ ${typeof msg === "string" ? msg : JSON.stringify(msg)}`);
+  return showMessage(`⚠️ ${msg}`);
 }
 
 
@@ -561,8 +637,9 @@ if (!res.ok) {
     showMessage(`✅ Your appointment is booked for ${parsed.toLocaleString()}!\n${linkify(confirmation_link)}`);
     showMessage("Anything else I can help you with?");
     insertQuickOptions();
+insertRatingWidget();
 } catch (error) {
-  showMessage("⚠️ Couldn’t complete booking. Please try again.");
+  showMessage("⚠️ Couldn’t complete booking. Please try again.", false, false, "", true);
 }
 }
 
@@ -577,16 +654,18 @@ if (!res.ok) {
         if (collecting === "name") {
           userName = txt;
           collecting = "email";
-          return showMessage(`Great, ${userName}! Now, what’s your email?`);
+          return showMessage(`${getPersonalizedGreeting()} ${config.askEmail || "Now, what’s your email?"}`);
         } else if (collecting === "email") {
           userEmail = txt;
-          if (!userEmail.includes("@")) {
-            return showMessage("❌ Please enter a valid email.");
-          }
-          leadSubmitted = true;
-          collecting = "done";
-          showMessage(`✅ Thanks, ${userName}! I’m ${chatbotName}. How can I help?`);
-          return insertQuickOptions();
+if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userEmail)) {
+  showMessage("❌ Please enter a valid email address.", false, false, "", true);
+  return;
+}
+leadSubmitted = true;
+collecting = "done";
+showMessage(`✅ Thanks, ${userName}! I’m ${chatbotName}. How can I help?`);
+return insertQuickOptions();
+
         }
       }
 
@@ -598,10 +677,26 @@ if (!res.ok) {
           if (parsed.time) bookingState.time = parsed.time;
           return startBookingFlow();
         }
+
+        // Handoff to human agent if user requests it
+        if (/human|agent|real person|support|help/i.test(txt)) {
+          showMessage(config.handoff?.intro || "Connecting you to a human agent...", false);
+          // Optionally add WhatsApp or other handoff links:
+          if (config.handoff?.whatsapp) showMessage(config.handoff.whatsapp, false);
+          return;
+        }
+
       }
 
       await sendMessage(txt);
     }
+
+function stripTags(str) {
+  const div = document.createElement('div');
+  div.innerHTML = str;
+  return div.textContent || div.innerText || "";
+}
+
 
     async function sendMessage(txt) {
       const id = `msg-${Date.now()}`;
@@ -618,16 +713,27 @@ if (!res.ok) {
         const res = await fetch(`${API_BASE}/chat`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ question: txt, token, client_id })
+          body: JSON.stringify({
+  question: txt,
+  token,
+  client_id,
+  history: conversationHistory,    // <-- Already in your memory implementation
+  booking: bookingState           // <-- NEW: Send booking state!
+})
         });
         const wrapper = getEl(`${id}-wrapper`);
         if (wrapper) wrapper.remove();
         if (!res.ok) return showMessage("⚠️ Server error. Please try again.", false);
         const data = await res.json();
-        const htmlAnswer = linkify(data.answer);
-        showMessage(`${chatbotName}: ${htmlAnswer}`, false);
-        replySound?.play();
-        chatLog += `${chatbotName}: ${data.answer}\n`;
+const safeAnswer =
+  typeof data.answer === "string"
+    ? linkify(stripTags(data.answer))
+    : (data.answer ? JSON.stringify(data.answer, null, 2) : "No response from bot.");
+showMessage(`${chatbotName}: ${safeAnswer}`, false);
+updateConversationHistory(txt, safeAnswer); // log conversation
+replySound?.play();
+chatLog += `${chatbotName}: ${safeAnswer}\n`;
+
       } catch {
         const errEl = getEl(id);
         if (errEl) errEl.innerText = "⚠️ Something went wrong";
@@ -649,7 +755,8 @@ if (!res.ok) {
       t.style.display = open ? "block" : "none";
       if (!open) {
         bubbleSound?.play();
-        if (!leadSubmitted) showMessage("👋 Hi there! What’s your name?");
+        if (!leadSubmitted) showMessage(getPersonalizedGreeting() + " " + (config.greetingIntro || "What’s your name?"));
+
       }
     };
 
@@ -675,10 +782,40 @@ if (!res.ok) {
         played = true;
       }
     };
-    ["click","scroll","mousemove","keydown"].forEach(ev =>
+        ["click","scroll","mousemove","keydown"].forEach(ev =>
       window.addEventListener(ev, playOnce, { once: true })
     );
+
+  // --- Proactive, Exit-Intent, and Scroll-Depth Messages (Config-Driven) ---
+
+  // Time-on-page proactive message (shows after 45 seconds if no bot message yet)
+  setTimeout(() => {
+    if (!window.__247CONVO_PROACTIVE_SHOWN && !document.querySelector('.msg-wrapper.bot')) {
+      window.__247CONVO_PROACTIVE_SHOWN = true;
+      showMessage(config.proactive?.timeOnPage || "How can I help you today?", false);
+    }
+  }, 45000);
+
+  // Exit intent (when user moves mouse out the top)
+  document.addEventListener("mouseleave", e => {
+    if (e.clientY < 10 && !window.__247CONVO_EXIT_SHOWN) {
+      window.__247CONVO_EXIT_SHOWN = true;
+      showMessage(config.proactive?.exitIntent || "Leaving already? Any last questions?", false);
+    }
+  });
+
+  // Scroll depth (when user scrolls 60% of page)
+  window.addEventListener("scroll", () => {
+    if (!window.__247CONVO_SCROLL_SHOWN &&
+        (window.scrollY / (document.body.scrollHeight - window.innerHeight)) > 0.6
+    ) {
+      window.__247CONVO_SCROLL_SHOWN = true;
+      showMessage(config.proactive?.scrollDepth || "Questions so far? Ask me!", false);
+    }
+  });
+
   }
+
 
 function waitForChronoThenRun() {
   if (typeof chrono !== "undefined") {
