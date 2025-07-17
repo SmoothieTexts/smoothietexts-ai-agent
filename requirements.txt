@@ -1,6 +1,21 @@
+# requirements.txt
+
 fastapi
 uvicorn
 python-dotenv
-openai
 supabase
+openai
 numpy
+requests
+pytz
+
+# Google integration
+google-auth                  # used in backend (Google service accounts + token refresh)
+google-api-python-client     # used in backend (Calendar API access)
+google-auth-oauthlib         # used in setup_google_client.py (OAuth flow)
+
+# Microsoft Graph (optional)
+msal
+
+# Utilities
+python-dateutil              # for parsing datetime

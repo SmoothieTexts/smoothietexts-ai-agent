@@ -1,0 +1,25 @@
+{
+  "chatbotName": "JoeBot",
+  "brandName": "The Rich Joe",
+  "supportUrl": "https://therichjoe.com/contact",
+  "primaryColor": "#1A1A1A",
+  "accentColor": "#E2B007",
+  "lightAccent": "#FFF8E0",
+  "buttonColor": "#FF6F00",
+  "textLight": "#F5F5F5",
+  "avatarUrl": "https://two47convo.onrender.com/avatar.png",
+  "quickOption1": "What services do you offer?",
+  "quickOption2": "How can I get started?",
+  "quickOption3": "Book Appointment",
+  "token": "247convobot-2025",
+  "client_id": "therichjoe",
+  "meetingDuration": "30",
+  "bookingProvider": "google"
+"availableHours": {
+  "monday":   ["09:00", "17:00"],
+  "tuesday":  ["09:00", "17:00"],
+  "wednesday":["09:00", "17:00"],
+  "thursday": ["09:00", "17:00"],
+  "friday":   ["09:00", "15:00"]
+}
+}

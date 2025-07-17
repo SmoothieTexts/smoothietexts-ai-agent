@@ -1,6 +1,9 @@
 services:
+  # ──────────────────────────────────────────────────────────────────────────
+  # Service A: FastAPI backend (configs, /chat, /summary) with CORS
+  # ──────────────────────────────────────────────────────────────────────────
   - type: web
-    name: smoothie-ai-backend
+    name: two47convobot-api
     env: python
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn chatbot_api:app --host 0.0.0.0 --port 10000
@@ -11,5 +14,28 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
-      - key: SUPABASE_TABLE_NAME
-        value: smoothie_knowledge
+      - key: API_TOKEN
+        sync: false
+      - key: SUPABASE_TABLE_NAME_KB
+        value: client_knowledge_base
+      - key: SUPABASE_TABLE_NAME_LOG
+        value: client_conversations
+    # no static files here
+    staticPublishPath: ""
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Service B: Static site (loader, fragment, CSS, JS) with wildcard CORS
+  # ──────────────────────────────────────────────────────────────────────────
+  - type: static
+    name: two47convo-static
+    staticPublishPath: static
+    routes:
+      - type: header
+        path: "/*"
+        headers:
+          - key: Access-Control-Allow-Origin
+            value: "*"
+          - key: Access-Control-Allow-Methods
+            value: "GET,OPTIONS"
+          - key: Access-Control-Allow-Headers
+            value: "*"
