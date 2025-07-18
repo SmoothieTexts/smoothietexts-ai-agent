@@ -840,7 +840,8 @@ chatLog += `${chatbotName}: ${safeAnswer}\n`;
     };
         ["click","scroll","mousemove","keydown"].forEach(ev =>
       window.addEventListener(ev, playOnce, { once: true })
-    );
+    ); // <-- THIS IS THE END OF RUN FUNCTION!
+} // <-- ADD THIS CLOSING BRACE
 
 
 function waitForChronoThenRun() {
