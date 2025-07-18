@@ -47,6 +47,10 @@
     return JSON.stringify(err);
   }
 
+function userCancelled(txt) {
+  return /^(cancel|no|stop|don't want|not now|exit|never mind|nope|quit|back|forget it|don’t want to book|i don't want)/i.test(txt.trim());
+}
+
   async function run() {
     const client_id = getClientID();
     const config = window.__247CONVO_CONFIG__ || await loadConfig(client_id);
@@ -484,9 +488,17 @@ if (availability) {
     "What date and time would you like? <br><i>(e.g., 2025-08-01 4 PM or 'next Friday at noon')</i>"
   );
 }
-  const rawInput = await waitForUserInput();
-  userInput.value = "";
-  showMessage(rawInput, true);
+const rawInput = await waitForUserInput();
+if (userCancelled(rawInput)) {
+  bookingState = { inProgress: false, date: null, time: null };
+  showMessage("No problem, I’ve cancelled the booking. Let me know if you need anything else.");
+  showMessage("Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
+  insertQuickOptions();
+  return;
+}
+userInput.value = "";
+showMessage(rawInput, true);
+
 
   // 🧠 First try native JavaScript parsing
   let parsed = new Date(rawInput);
@@ -506,7 +518,13 @@ const iso = today.toISOString().split("T")[0];
 const res = await fetch(`${API_BASE}/availability/${getClientID()}?date=${iso}`);
 const data = await res.json();
 parsed = await showAvailableSlotsPicker(today, data.busy || [], config);
-if (!parsed) return showMessage("❌ Booking cancelled.");
+if (!parsed) {
+  showMessage("No problem, I’ve cancelled the booking. Let me know if you need anything else.");
+  showMessage("Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
+  insertQuickOptions();
+  return;
+}
+
     }
   }
 
@@ -518,7 +536,12 @@ const iso = today.toISOString().split("T")[0];
 const res = await fetch(`${API_BASE}/availability/${getClientID()}?date=${iso}`);
 const data = await res.json();
 parsed = await showAvailableSlotsPicker(today, data.busy || [], config);
-if (!parsed) return showMessage("❌ Booking cancelled.");
+if (!parsed) {
+  showMessage("No problem, I’ve cancelled the booking. Let me know if you need anything else.");
+  showMessage("Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
+  insertQuickOptions();
+  return;
+}
 
   }
 
@@ -543,21 +566,34 @@ if (selectedMinutes < startMinutes || selectedMinutes > endMinutes) {
 
   // 📝 Ask for purpose
   showMessage("What’s the purpose of this meeting?");
-  const purpose = await waitForUserInput();
-  const lastPurpose = purpose;
-  userInput.value = "";
-  showMessage(purpose, true);
+const purpose = await waitForUserInput();
+if (userCancelled(purpose)) {
+  bookingState = { inProgress: false, date: null, time: null };
+  showMessage("No problem, I’ve cancelled the booking. Let me know if you need anything else.");
+  showMessage("Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
+  insertQuickOptions();
+  return;
+}
+const lastPurpose = purpose;
+userInput.value = "";
+showMessage(purpose, true);
+
 
   // ✅ Show full summary and ask for final confirmation
   const duration = config.meetingDuration || 40;
   showMessage(`📅 Meeting at: ${parsed.toLocaleString()} (${timezone})\n📝 Purpose: ${purpose}\n⏱️ Duration: ${duration} minutes`);
   showMessage("Confirm this booking? (yes / no)");
-  const confirm = await waitForUserInput();
-  userInput.value = "";
-  showMessage(confirm, true);
-  if (!/^y(es)?$/i.test(confirm)) {
-    return showMessage("Okay, booking canceled. Let me know if you want to try again.");
-  }
+const confirm = await waitForUserInput();
+if (userCancelled(confirm) || !/^y(es)?$/i.test(confirm)) {
+  bookingState = { inProgress: false, date: null, time: null };
+  showMessage("Okay, booking canceled. Let me know if you need anything else!");
+  showMessage("Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
+  insertQuickOptions();
+  return;
+}
+userInput.value = "";
+showMessage(confirm, true);
+
 
 console.log("Booking payload:", {
   client_id, token,
@@ -599,6 +635,43 @@ if (!res.ok) {
     msg = await res.text() || "Unknown error";
   }
   // ... rest unchanged
+
+// Handle backend error: Outside available hours
+if (typeof msg === "string" && msg.toLowerCase().includes("outside available hours")) {
+  showMessage("The time you selected is outside our available hours. Would you like to pick another time? (yes/no)");
+  const response = await waitForUserInput();
+  if (userCancelled(response)) {
+    bookingState = { inProgress: false, date: null, time: null };
+    showMessage("Booking cancelled. Let me know if you need help with anything else.");
+    // (Optional) Ask why user cancelled:
+    // showMessage("Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
+    insertQuickOptions();
+    return;
+  } else if (/^y(es)?$/i.test(response)) {
+    // Show time picker logic here
+    const today = new Date();
+    const iso = today.toISOString().split("T")[0];
+    const res2 = await fetch(`${API_BASE}/availability/${getClientID()}?date=${iso}`);
+    const data2 = await res2.json();
+    const picked = await showAvailableSlotsPicker(today, data2.busy || [], config);
+    if (!picked) {
+      showMessage("No problem, I’ve cancelled the booking. Let me know if you need anything else.");
+  showMessage("Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
+      insertQuickOptions();
+      return;
+    }
+    // You could continue booking with this picked time...
+    // Consider asking for new purpose if needed, or continue your booking flow here.
+    // For now, just continue your normal flow.
+  } else {
+    // fallback, treat as cancel
+    bookingState = { inProgress: false, date: null, time: null };
+    showMessage("Okay, no booking for now. What else can I help with?");
+  showMessage("Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
+    insertQuickOptions();
+    return;
+  }
+}
 
 
   // Clean up ugly error objects if backend returns JSON as a string
@@ -709,12 +782,16 @@ async function bookSlot({ datetime, purpose }) {
   // Confirm booking
   showMessage(`📅 Suggested: ${parsed.toLocaleString()} (${timezone})\n📝 Purpose: ${purpose}\n⏱️ Duration: ${duration} minutes`);
   showMessage("Book this time? (yes / no)");
-  const confirm = await waitForUserInput();
-  userInput.value = "";
-  showMessage(confirm, true);
-  if (!/^y(es)?$/i.test(confirm)) {
-    return showMessage("Okay, booking canceled. Let me know if you want to try again.");
-  }
+const confirm = await waitForUserInput();
+if (userCancelled(confirm) || !/^y(es)?$/i.test(confirm)) {
+  bookingState = { inProgress: false, date: null, time: null };
+  showMessage("Okay, booking canceled. Let me know if you need anything else!");
+  showMessage("Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
+  insertQuickOptions();
+  return;
+}
+userInput.value = "";
+showMessage(confirm, true);
 
   showMessage("Booking your appointment…", false, true);
   try {
