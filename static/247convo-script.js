@@ -48,8 +48,35 @@
   }
 
 function userCancelled(txt) {
-  return /^(cancel|no|stop|don't want|not now|exit|never mind|nope|quit|back|forget it|don’t want to book|i don't want|later|maybe another time|not now|book later|some other time|will book later)/i.test(txt.trim());
+  const cancelPhrases = [
+    "cancel",
+    "no",
+    "stop",
+    "don't want",
+    "not now",
+    "exit",
+    "never mind",
+    "nope",
+    "quit",
+    "back",
+    "forget it",
+    "don’t want",
+    "book later",
+    "maybe another time",
+    "some other time",
+    "not booking",
+    "not booking now",
+    "not booking anymore",
+    "don’t want to book",
+    "i am not booking now",
+    "i don't want to book anymore",
+    "i’m not booking",
+    "will book later"
+  ];
+  const txtNorm = txt.trim().toLowerCase();
+  return cancelPhrases.some(phrase => txtNorm.includes(phrase));
 }
+
 
   async function run() {
     const client_id = getClientID();
@@ -134,6 +161,10 @@ let conversationHistory = []; // NEW: For memory
 function updateConversationHistory(user, bot) {
   conversationHistory.push({ user, bot });
   if (conversationHistory.length > (config.memoryLimit || 5)) conversationHistory.shift();
+}
+
+function resetBookingState() {
+  bookingState = { inProgress: false, date: null, time: null };
 }
 
 function insertRatingWidget() {
@@ -490,7 +521,8 @@ if (availability) {
 }
 const rawInput = await waitForUserInput();
 if (userCancelled(rawInput)) {
-  bookingState = { inProgress: false, date: null, time: null };
+    resetBookingState();
+  await sendMessage("Booking cancelled."); // <== ADD THIS LINE!
   showMessage("No problem, I’ve cancelled the booking. Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
 const feedback = await waitForUserInput();
 if (userCancelled(feedback)) {
@@ -592,7 +624,8 @@ if (selectedMinutes < startMinutes || selectedMinutes > endMinutes) {
   showMessage("What’s the purpose of this meeting?");
 const purpose = await waitForUserInput();
 if (userCancelled(purpose)) {
-  bookingState = { inProgress: false, date: null, time: null };
+    resetBookingState();
+  await sendMessage("Booking cancelled."); // <== ADD THIS LINE!
   showMessage("No Problem, I've cancelled the booking. Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
 const feedback = await waitForUserInput();
 if (userCancelled(feedback)) {
@@ -617,7 +650,8 @@ showMessage(purpose, true);
   showMessage("Confirm this booking? (yes / no)");
 const confirm = await waitForUserInput();
 if (userCancelled(confirm) || !/^y(es)?$/i.test(confirm)) {
-  bookingState = { inProgress: false, date: null, time: null };
+    resetBookingState();
+  await sendMessage("Booking cancelled."); // <== ADD THIS LINE!
   showMessage("Okay, booking canceled. Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
 const feedback = await waitForUserInput();
 if (userCancelled(feedback)) {
@@ -681,7 +715,8 @@ if (typeof msg === "string" && msg.toLowerCase().includes("outside available hou
   showMessage("The time you selected is outside our available hours. Would you like to pick another time? (yes/no)");
   const response = await waitForUserInput();
   if (userCancelled(response)) {
-    bookingState = { inProgress: false, date: null, time: null };
+      resetBookingState();
+  await sendMessage("Booking cancelled."); // <== ADD THIS LINE!
     // (Optional) Ask why user cancelled:
     // showMessage("Booking cancelled. Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
 const feedback = await waitForUserInput();
@@ -721,7 +756,8 @@ await sendMessage(feedback);
     // For now, just continue your normal flow.
   } else {
     // fallback, treat as cancel
-    bookingState = { inProgress: false, date: null, time: null };
+      resetBookingState();
+  await sendMessage("Booking cancelled."); // <== ADD THIS LINE!
     showMessage("Okay, no booking for now. What else can I help with?");
 const feedback = await waitForUserInput();
 if (userCancelled(feedback)) {
@@ -847,7 +883,8 @@ async function bookSlot({ datetime, purpose }) {
   showMessage("Book this time? (yes / no)");
 const confirm = await waitForUserInput();
 if (userCancelled(confirm) || !/^y(es)?$/i.test(confirm)) {
-  bookingState = { inProgress: false, date: null, time: null };
+    resetBookingState();
+  await sendMessage("Booking cancelled."); // <== ADD THIS LINE!
   showMessage("Okay booking canceled. Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
 const feedback = await waitForUserInput();
 if (userCancelled(feedback)) {
@@ -912,6 +949,16 @@ insertRatingWidget();
       if (!txt) return;
       showMessage(txt, true);
       userInput.value = "";
+
+  // ⬇️ ADD THIS BLOCK RIGHT HERE:
+  if (/start over/i.test(txt)) {
+    resetBookingState();
+    await sendMessage("Booking cancelled."); // sync to backend/context
+    showMessage("Booking process reset. What else can I help you with?");
+    insertQuickOptions();
+    return;
+  }
+  // ⬆️ END OF BLOCK
 
       if (!leadSubmitted) {
         if (collecting === "name") {

@@ -124,6 +124,41 @@ def rate_limited(ip: str) -> bool:
     return False
 
 def answer(user_q: str, client_id: str, cfg: dict, oa: OpenAI, history: list = None, booking: dict = None) -> str:
+    # Cancellation handling block - always keep this as the FIRST thing!
+    if booking and isinstance(booking, dict):
+        user_cancel_phrases = [
+            "start over",
+            "booking cancelled",
+            "cancel",
+            "i am not booking now",
+            "no",
+            "never mind",
+            "forget it",
+            "stop",
+            "don't want",
+            "not now",
+            "exit",
+            "nope",
+            "quit",
+            "back",
+            "don’t want",
+            "book later",
+            "maybe another time",
+            "some other time",
+            "not booking",
+            "not booking now",
+            "not booking anymore",
+            "don’t want to book",
+            "i don't want to book anymore",
+            "i’m not booking",
+            "will book later"
+        ]
+        user_q_norm = user_q.strip().lower()
+        if any(phrase in user_q_norm for phrase in user_cancel_phrases):
+            booking["inProgress"] = False
+            booking["date"] = None
+            booking["time"] = None
+    # ⬆️ END CANCELLATION BLOCK
     ctx, score = fetch_best_match(user_q, client_id, oa)
     history = history or []
     booking = booking or {}
