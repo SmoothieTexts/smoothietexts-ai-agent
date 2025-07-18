@@ -48,7 +48,7 @@
   }
 
 function userCancelled(txt) {
-  return /^(cancel|no|stop|don't want|not now|exit|never mind|nope|quit|back|forget it|don’t want to book|i don't want)/i.test(txt.trim());
+  return /^(cancel|no|stop|don't want|not now|exit|never mind|nope|quit|back|forget it|don’t want to book|i don't want|later|maybe another time|not now|book later|some other time|will book later)/i.test(txt.trim());
 }
 
   async function run() {
@@ -491,8 +491,16 @@ if (availability) {
 const rawInput = await waitForUserInput();
 if (userCancelled(rawInput)) {
   bookingState = { inProgress: false, date: null, time: null };
-  showMessage("No problem, I’ve cancelled the booking. Let me know if you need anything else.");
-  showMessage("Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
+  showMessage("No problem, I’ve cancelled the booking. Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
+const feedback = await waitForUserInput();
+if (userCancelled(feedback)) {
+  showMessage("No problem, you can book any time. What else can I help with?");
+  insertQuickOptions();
+  return;
+}
+// If not cancelled, treat as normal chat
+await sendMessage(feedback);
+
   insertQuickOptions();
   return;
 }
@@ -519,8 +527,16 @@ const res = await fetch(`${API_BASE}/availability/${getClientID()}?date=${iso}`)
 const data = await res.json();
 parsed = await showAvailableSlotsPicker(today, data.busy || [], config);
 if (!parsed) {
-  showMessage("No problem, I’ve cancelled the booking. Let me know if you need anything else.");
-  showMessage("Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
+  showMessage("No problem, I’ve cancelled the booking. Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
+const feedback = await waitForUserInput();
+if (userCancelled(feedback)) {
+  showMessage("No problem, you can book any time. What else can I help with?");
+  insertQuickOptions();
+  return;
+}
+// If not cancelled, treat as normal chat
+await sendMessage(feedback);
+
   insertQuickOptions();
   return;
 }
@@ -537,8 +553,16 @@ const res = await fetch(`${API_BASE}/availability/${getClientID()}?date=${iso}`)
 const data = await res.json();
 parsed = await showAvailableSlotsPicker(today, data.busy || [], config);
 if (!parsed) {
-  showMessage("No problem, I’ve cancelled the booking. Let me know if you need anything else.");
-  showMessage("Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
+  showMessage("No problem, I've cancelled the booking. Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
+const feedback = await waitForUserInput();
+if (userCancelled(feedback)) {
+  showMessage("No problem, you can book any time. What else can I help with?");
+  insertQuickOptions();
+  return;
+}
+// If not cancelled, treat as normal chat
+await sendMessage(feedback);
+
   insertQuickOptions();
   return;
 }
@@ -569,8 +593,16 @@ if (selectedMinutes < startMinutes || selectedMinutes > endMinutes) {
 const purpose = await waitForUserInput();
 if (userCancelled(purpose)) {
   bookingState = { inProgress: false, date: null, time: null };
-  showMessage("No problem, I’ve cancelled the booking. Let me know if you need anything else.");
-  showMessage("Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
+  showMessage("No Problem, I've cancelled the booking. Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
+const feedback = await waitForUserInput();
+if (userCancelled(feedback)) {
+  showMessage("No problem, you can book any time. What else can I help with?");
+  insertQuickOptions();
+  return;
+}
+// If not cancelled, treat as normal chat
+await sendMessage(feedback);
+
   insertQuickOptions();
   return;
 }
@@ -586,8 +618,16 @@ showMessage(purpose, true);
 const confirm = await waitForUserInput();
 if (userCancelled(confirm) || !/^y(es)?$/i.test(confirm)) {
   bookingState = { inProgress: false, date: null, time: null };
-  showMessage("Okay, booking canceled. Let me know if you need anything else!");
-  showMessage("Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
+  showMessage("Okay, booking canceled. Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
+const feedback = await waitForUserInput();
+if (userCancelled(feedback)) {
+  showMessage("No problem, you can book any time. What else can I help with?");
+  insertQuickOptions();
+  return;
+}
+// If not cancelled, treat as normal chat
+await sendMessage(feedback);
+
   insertQuickOptions();
   return;
 }
@@ -642,9 +682,17 @@ if (typeof msg === "string" && msg.toLowerCase().includes("outside available hou
   const response = await waitForUserInput();
   if (userCancelled(response)) {
     bookingState = { inProgress: false, date: null, time: null };
-    showMessage("Booking cancelled. Let me know if you need help with anything else.");
     // (Optional) Ask why user cancelled:
-    // showMessage("Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
+    // showMessage("Booking cancelled. Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
+const feedback = await waitForUserInput();
+if (userCancelled(feedback)) {
+  showMessage("No problem, you can book any time. What else can I help with?");
+  insertQuickOptions();
+  return;
+}
+// If not cancelled, treat as normal chat
+await sendMessage(feedback);
+
     insertQuickOptions();
     return;
   } else if (/^y(es)?$/i.test(response)) {
@@ -655,8 +703,16 @@ if (typeof msg === "string" && msg.toLowerCase().includes("outside available hou
     const data2 = await res2.json();
     const picked = await showAvailableSlotsPicker(today, data2.busy || [], config);
     if (!picked) {
-      showMessage("No problem, I’ve cancelled the booking. Let me know if you need anything else.");
-  showMessage("Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
+  showMessage("I've cancelled the booking. Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
+const feedback = await waitForUserInput();
+if (userCancelled(feedback)) {
+  showMessage("No problem, you can book any time. What else can I help with?");
+  insertQuickOptions();
+  return;
+}
+// If not cancelled, treat as normal chat
+await sendMessage(feedback);
+
       insertQuickOptions();
       return;
     }
@@ -667,7 +723,14 @@ if (typeof msg === "string" && msg.toLowerCase().includes("outside available hou
     // fallback, treat as cancel
     bookingState = { inProgress: false, date: null, time: null };
     showMessage("Okay, no booking for now. What else can I help with?");
-  showMessage("Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
+const feedback = await waitForUserInput();
+if (userCancelled(feedback)) {
+  showMessage("No problem, you can book any time. What else can I help with?");
+  insertQuickOptions();
+  return;
+}
+// If not cancelled, treat as normal chat
+await sendMessage(feedback);
     insertQuickOptions();
     return;
   }
@@ -785,8 +848,16 @@ async function bookSlot({ datetime, purpose }) {
 const confirm = await waitForUserInput();
 if (userCancelled(confirm) || !/^y(es)?$/i.test(confirm)) {
   bookingState = { inProgress: false, date: null, time: null };
-  showMessage("Okay, booking canceled. Let me know if you need anything else!");
-  showMessage("Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
+  showMessage("Okay booking canceled. Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
+const feedback = await waitForUserInput();
+if (userCancelled(feedback)) {
+  showMessage("No problem, you can book any time. What else can I help with?");
+  insertQuickOptions();
+  return;
+}
+// If not cancelled, treat as normal chat
+await sendMessage(feedback);
+
   insertQuickOptions();
   return;
 }
@@ -861,27 +932,29 @@ return insertQuickOptions();
         }
       }
 
-      if (leadSubmitted) {
-        const parsed = parseBookingIntent(txt);
-        if (parsed.intent === "booking") {
-          bookingState.inProgress = true;
-          if (parsed.date) bookingState.date = parsed.date;
-          if (parsed.time) bookingState.time = parsed.time;
-          return startBookingFlow();
-        }
+if (leadSubmitted) {
+  // Only trigger booking if user shows booking intent!
+  const parsed = parseBookingIntent(txt);
+  if (parsed.intent === "booking") {
+    bookingState.inProgress = true;
+    if (parsed.date) bookingState.date = parsed.date;
+    if (parsed.time) bookingState.time = parsed.time;
+    return startBookingFlow();
+  }
 
-        // Handoff to human agent if user requests it
-        if (/human|agent|real person|support|help/i.test(txt)) {
-          showMessage(config.handoff?.intro || "Connecting you to a human agent...", false);
-          // Optionally add WhatsApp or other handoff links:
-          if (config.handoff?.whatsapp) showMessage(config.handoff.whatsapp, false);
-          return;
-        }
+  // Handoff to human agent if user requests it
+  if (/human|agent|real person|support|help/i.test(txt)) {
+    showMessage(config.handoff?.intro || "Connecting you to a human agent...", false);
+    if (config.handoff?.whatsapp) showMessage(config.handoff.whatsapp, false);
+    return;
+  }
 
-      }
+  // *** DO NOT CALL startBookingFlow() for any other input ***
+}
 
-      await sendMessage(txt);
-    }
+// All other input just goes to normal chat/AI
+await sendMessage(txt);
+
 
 function stripTags(str) {
   const div = document.createElement('div');
