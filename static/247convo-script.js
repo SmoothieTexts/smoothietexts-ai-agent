@@ -842,36 +842,6 @@ chatLog += `${chatbotName}: ${safeAnswer}\n`;
       window.addEventListener(ev, playOnce, { once: true })
     );
 
-  // --- Proactive, Exit-Intent, and Scroll-Depth Messages (Config-Driven) ---
-
-  // Time-on-page proactive message (shows after 45 seconds if no bot message yet)
-  setTimeout(() => {
-    if (!window.__247CONVO_PROACTIVE_SHOWN && !document.querySelector('.msg-wrapper.bot')) {
-      window.__247CONVO_PROACTIVE_SHOWN = true;
-      showMessage(config.proactive?.timeOnPage || "How can I help you today?", false);
-    }
-  }, 45000);
-
-  // Exit intent (when user moves mouse out the top)
-  document.addEventListener("mouseleave", e => {
-    if (e.clientY < 10 && !window.__247CONVO_EXIT_SHOWN) {
-      window.__247CONVO_EXIT_SHOWN = true;
-      showMessage(config.proactive?.exitIntent || "Leaving already? Any last questions?", false);
-    }
-  });
-
-  // Scroll depth (when user scrolls 60% of page)
-  window.addEventListener("scroll", () => {
-    if (!window.__247CONVO_SCROLL_SHOWN &&
-        (window.scrollY / (document.body.scrollHeight - window.innerHeight)) > 0.6
-    ) {
-      window.__247CONVO_SCROLL_SHOWN = true;
-      showMessage(config.proactive?.scrollDepth || "Questions so far? Ask me!", false);
-    }
-  });
-
-  }
-
 
 function waitForChronoThenRun() {
   if (typeof chrono !== "undefined") {
