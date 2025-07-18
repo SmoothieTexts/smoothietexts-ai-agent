@@ -219,7 +219,7 @@ document.addEventListener("mouseleave", e => {
     popup && !popup.classList.contains("open") &&
     !window.__247CONVO_BUBBLE_MSG_EXIT_SHOWN
   ) {
-const provText = (config.proactive && config.proactive.bubble) ||
+const provText = (config.proactive && config.proactive.exitIntent) ||
   config.bubbleMessage ||
   `Need help? Ask ${chatbotName}.`;
 
@@ -241,7 +241,7 @@ window.addEventListener("scroll", () => {
     !window.__247CONVO_BUBBLE_MSG_SCROLL_SHOWN &&
     (window.scrollY / (document.body.scrollHeight - window.innerHeight)) > 0.6
   ) {
-const provText = (config.proactive && config.proactive.bubble) ||
+const provText = (config.proactive && config.proactive.scrollDepth) ||
   config.bubbleMessage ||
   `Need help? Ask ${chatbotName}.`;
 
