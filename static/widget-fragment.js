@@ -4,7 +4,8 @@
 (function() {
   document.body.insertAdjacentHTML('beforeend', `
     <!-- 1. Chat Bubble Shell -->
-    <div id="chat-bubble">💬</div>
+    <div id="chat-bubble">💬
+  <span id="chat-badge"></span></div>
     <div id="chat-bubble-msg">Need help? Ask us anything.</div>
 
     <!-- 2. Chat Popup Container -->

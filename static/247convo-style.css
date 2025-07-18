@@ -382,6 +382,61 @@ width: 40%;
   gap: 8px;
 }
 
+/* ---- Bubble Shake/Bounce ---- */
+@keyframes convo-bounce {
+  0%,100% { transform: translateY(0);}
+  30% { transform: translateY(-8px);}
+  60% { transform: translateY(4px);}
+}
+#chat-bubble.bounce {
+  animation: convo-bounce 0.7s cubic-bezier(.26,.53,.74,1.48);
+}
+
+/* ---- Bubble Pulse Highlight ---- */
+@keyframes convo-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(65,139,255,0.7);}
+  70% { box-shadow: 0 0 0 12px rgba(65,139,255,0);}
+  100% { box-shadow: 0 0 0 0 rgba(65,139,255,0);}
+}
+#chat-bubble.pulse {
+  animation: convo-pulse 1.2s infinite;
+}
+
+/* ---- Badge ---- */
+#chat-badge {
+  position: absolute;
+  top: 2px; right: 2px;
+  background: #ff2b2b;
+  color: #fff;
+  border-radius: 50%;
+  font-size: 0.78em;
+  padding: 1px 6px;
+  min-width: 16px;
+  text-align: center;
+  font-weight: bold;
+  z-index: 2;
+  box-shadow: 0 1px 5px rgba(0,0,0,0.18);
+  border: 2px solid #fff;
+  display: none;
+}
+
+/* ---- Tooltip Typewriter ---- */
+.typewriter {
+  display: inline-block;
+  overflow: hidden;
+  border-right: .13em solid #248cff;
+  white-space: nowrap;
+  animation: typing 1.8s steps(28, end), blink-caret .72s step-end infinite;
+}
+@keyframes typing {
+  from { width: 0 }
+  to { width: 100% }
+}
+@keyframes blink-caret {
+  0%,100% { border-color: transparent }
+  50% { border-color: #248cff; }
+}
+
 
 /* 📱 Responsive Tweaks */
 @media (max-width: 768px) {

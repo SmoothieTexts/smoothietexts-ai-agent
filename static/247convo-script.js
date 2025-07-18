@@ -73,6 +73,50 @@
     const chatBox     = getEl("chat");
     const userInput   = getEl("userInput");
     const sendBtn     = getEl("sendBtn");
+    const chatBadge   = getEl("chat-badge");
+
+// --- UI EFFECTS FOR BUBBLE/TOOLTIP --- //
+
+function shakeBubble() {
+  bubble.classList.remove("bounce");
+  void bubble.offsetWidth;
+  bubble.classList.add("bounce");
+  setTimeout(() => bubble.classList.remove("bounce"), 800);
+}
+
+function pulseBubble(on = true) {
+  bubble.classList.toggle("pulse", on);
+}
+
+function showBadge(count = 1) {
+  if (!chatBadge) return;
+  chatBadge.textContent = count;
+  chatBadge.style.display = "inline-block";
+}
+function hideBadge() {
+  if (!chatBadge) return;
+  chatBadge.style.display = "none";
+}
+
+// ---- Typewriter/reveal animation for tooltip ----
+function typewriterTooltip(text, speed = 33) {
+  if (!tooltip) return;
+  tooltip.classList.remove('typewriter');
+  tooltip.innerText = ''; // reset
+  let i = 0;
+  function type() {
+    if (i <= text.length) {
+      tooltip.innerText = text.slice(0, i);
+      i++;
+      setTimeout(type, speed);
+    } else {
+      tooltip.classList.add('typewriter');
+      setTimeout(() => tooltip.classList.remove('typewriter'), 1800); // Optional: remove after reveal
+    }
+  }
+  type();
+}
+
 
     let chatLog       = "";
     let userName      = "";
@@ -153,10 +197,15 @@ setTimeout(() => {
     popup && !popup.classList.contains("open") &&
     !window.__247CONVO_BUBBLE_MSG_SHOWN
   ) {
-    tooltip.innerText =
-      (config.proactive && config.proactive.bubble) ||
-      config.bubbleMessage ||
-      `Need help? Ask ${chatbotName}.`;
+const provText = (config.proactive && config.proactive.bubble) ||
+  config.bubbleMessage ||
+  `Need help? Ask ${chatbotName}.`;
+
+typewriterTooltip(provText); // <-- Reveal effect for message
+shakeBubble();               // <-- Bubble bounce
+pulseBubble(true);           // <-- Bubble pulse highlight
+showBadge(1);                // <-- Show 1 notification badge
+
     window.__247CONVO_BUBBLE_MSG_SHOWN = true;
   }
 }, 35000);
@@ -170,10 +219,15 @@ document.addEventListener("mouseleave", e => {
     popup && !popup.classList.contains("open") &&
     !window.__247CONVO_BUBBLE_MSG_EXIT_SHOWN
   ) {
-    tooltip.innerText =
-      (config.proactive && config.proactive.exitIntent) ||
-      config.bubbleMessage ||
-      `Need help? Ask ${chatbotName}.`;
+const provText = (config.proactive && config.proactive.bubble) ||
+  config.bubbleMessage ||
+  `Need help? Ask ${chatbotName}.`;
+
+typewriterTooltip(provText); // <-- Reveal effect for message
+shakeBubble();               // <-- Bubble bounce
+pulseBubble(true);           // <-- Bubble pulse highlight
+showBadge(1);                // <-- Show 1 notification badge
+
     window.__247CONVO_BUBBLE_MSG_EXIT_SHOWN = true;
   }
 });
@@ -187,10 +241,15 @@ window.addEventListener("scroll", () => {
     !window.__247CONVO_BUBBLE_MSG_SCROLL_SHOWN &&
     (window.scrollY / (document.body.scrollHeight - window.innerHeight)) > 0.6
   ) {
-    tooltip.innerText =
-      (config.proactive && config.proactive.scrollDepth) ||
-      config.bubbleMessage ||
-      `Need help? Ask ${chatbotName}.`;
+const provText = (config.proactive && config.proactive.bubble) ||
+  config.bubbleMessage ||
+  `Need help? Ask ${chatbotName}.`;
+
+typewriterTooltip(provText); // <-- Reveal effect for message
+shakeBubble();               // <-- Bubble bounce
+pulseBubble(true);           // <-- Bubble pulse highlight
+showBadge(1);                // <-- Show 1 notification badge
+
     window.__247CONVO_BUBBLE_MSG_SCROLL_SHOWN = true;
   }
 });
@@ -808,6 +867,9 @@ chatLog += `${chatbotName}: ${safeAnswer}\n`;
       if (!p || !t) return;
       const open = p.classList.contains("open");
       p.classList.toggle("open", !open);
+// Reset effects when chat opens
+pulseBubble(false); // Remove pulse
+hideBadge();        // Hide badge
       t.style.display = open ? "block" : "none";
       if (!open) {
         bubbleSound?.play();
