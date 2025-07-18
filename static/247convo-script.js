@@ -36,6 +36,54 @@
     };
   }
 
+function setBubbleTooltip(msg, options = {}) {
+  const tooltip = document.getElementById('chat-bubble-msg');
+  if (tooltip) {
+    tooltip.innerText = msg;
+    // Optionally retrigger typewriter animation
+    if (options.typewriter) {
+      tooltip.classList.remove('typewriter');
+      void tooltip.offsetWidth;
+      tooltip.classList.add('typewriter');
+    }
+  }
+}
+
+
+  function animateBubbleEffects({pulse=true, shake=true, badge=true, pointer=true, typewriter=true}) {
+    const bubble = document.getElementById('chat-bubble');
+    const badgeEl = document.getElementById('bubble-badge');
+    const pointerEl = document.getElementById('bubble-pointer');
+    const tooltip = document.getElementById('chat-bubble-msg');
+    // Pulse
+    if (pulse && bubble) {
+      bubble.classList.add('pulse');
+      setTimeout(() => bubble.classList.remove('pulse'), 900);
+    }
+    // Shake
+    if (shake && bubble) {
+      bubble.classList.add('shake');
+      setTimeout(() => bubble.classList.remove('shake'), 600);
+    }
+    // Badge (shows a red dot)
+    if (badge && badgeEl) {
+      badgeEl.style.display = 'block';
+    }
+    // Pointer Arrow
+    if (pointer && pointerEl) {
+      pointerEl.style.display = 'block';
+      setTimeout(() => pointerEl.style.display = 'none', 1600);
+    }
+    // Typewriter (animate tooltip message)
+    if (typewriter && tooltip) {
+      tooltip.classList.remove('typewriter');
+      void tooltip.offsetWidth; // force reflow
+      tooltip.classList.add('typewriter');
+    }
+    // Play bubble sound if available
+    if (typeof bubbleSound !== "undefined" && bubbleSound) bubbleSound.play();
+  }
+
   // ... existing utility functions above ...
   function getErrorMsg(err) {
     if (!err) return "Unknown error";
@@ -140,12 +188,13 @@ function getPersonalizedGreeting() {
     if (avatar && avatarUrl) avatar.style.backgroundImage = `url('${avatarUrl}')`;
     if (support) support.href = supportUrl;
     if (tooltip) {
-  tooltip.innerText = config.bubbleMessage || `Need help? Ask ${chatbotName}.`;
+setBubbleTooltip(config.bubbleMessage || `Need help? Ask ${chatbotName}.`, { typewriter: true });
 }
 
 // --- Proactive, Exit-Intent, and Scroll-Depth Messages on the chat bubble (tooltip), BEFORE chat is opened ---
 
 // Time-on-page: Show proactive bubble after 35s if chat not opened
+// Proactive triggers:
 setTimeout(() => {
   const popup = getEl("chatPopup");
   if (
@@ -153,15 +202,16 @@ setTimeout(() => {
     popup && !popup.classList.contains("open") &&
     !window.__247CONVO_BUBBLE_MSG_SHOWN
   ) {
-    tooltip.innerText =
+    setBubbleTooltip(
       (config.proactive && config.proactive.bubble) ||
       config.bubbleMessage ||
-      `Need help? Ask ${chatbotName}.`;
+      `Need help? Ask ${chatbotName}.`,
+      { typewriter: true }
+    );
     window.__247CONVO_BUBBLE_MSG_SHOWN = true;
   }
 }, 35000);
 
-// Exit intent: Show proactive bubble when user moves mouse out the top
 document.addEventListener("mouseleave", e => {
   const popup = getEl("chatPopup");
   if (
@@ -170,15 +220,16 @@ document.addEventListener("mouseleave", e => {
     popup && !popup.classList.contains("open") &&
     !window.__247CONVO_BUBBLE_MSG_EXIT_SHOWN
   ) {
-    tooltip.innerText =
+    setBubbleTooltip(
       (config.proactive && config.proactive.exitIntent) ||
       config.bubbleMessage ||
-      `Need help? Ask ${chatbotName}.`;
+      `Need help? Ask ${chatbotName}.`,
+      { typewriter: true }
+    );
     window.__247CONVO_BUBBLE_MSG_EXIT_SHOWN = true;
   }
 });
 
-// Scroll depth: Show proactive bubble if user scrolls 60% of the page
 window.addEventListener("scroll", () => {
   const popup = getEl("chatPopup");
   if (
@@ -187,10 +238,12 @@ window.addEventListener("scroll", () => {
     !window.__247CONVO_BUBBLE_MSG_SCROLL_SHOWN &&
     (window.scrollY / (document.body.scrollHeight - window.innerHeight)) > 0.6
   ) {
-    tooltip.innerText =
+    setBubbleTooltip(
       (config.proactive && config.proactive.scrollDepth) ||
       config.bubbleMessage ||
-      `Need help? Ask ${chatbotName}.`;
+      `Need help? Ask ${chatbotName}.`,
+      { typewriter: true }
+    );
     window.__247CONVO_BUBBLE_MSG_SCROLL_SHOWN = true;
   }
 });
@@ -809,6 +862,13 @@ chatLog += `${chatbotName}: ${safeAnswer}\n`;
       const open = p.classList.contains("open");
       p.classList.toggle("open", !open);
       t.style.display = open ? "block" : "none";
+
+  // >>> ADD THIS BLOCK to remove badge when opened <<<
+  if (!open) {
+    const badgeEl = document.getElementById('bubble-badge');
+    if (badgeEl) badgeEl.style.display = 'none';
+  }
+
       if (!open) {
         bubbleSound?.play();
         if (!leadSubmitted) showMessage(getPersonalizedGreeting() + " " + (config.greetingIntro || "What’s your name?"));
@@ -841,36 +901,6 @@ chatLog += `${chatbotName}: ${safeAnswer}\n`;
         ["click","scroll","mousemove","keydown"].forEach(ev =>
       window.addEventListener(ev, playOnce, { once: true })
     );
-
-  // --- Proactive, Exit-Intent, and Scroll-Depth Messages (Config-Driven) ---
-
-  // Time-on-page proactive message (shows after 45 seconds if no bot message yet)
-  setTimeout(() => {
-    if (!window.__247CONVO_PROACTIVE_SHOWN && !document.querySelector('.msg-wrapper.bot')) {
-      window.__247CONVO_PROACTIVE_SHOWN = true;
-      showMessage(config.proactive?.timeOnPage || "How can I help you today?", false);
-    }
-  }, 45000);
-
-  // Exit intent (when user moves mouse out the top)
-  document.addEventListener("mouseleave", e => {
-    if (e.clientY < 10 && !window.__247CONVO_EXIT_SHOWN) {
-      window.__247CONVO_EXIT_SHOWN = true;
-      showMessage(config.proactive?.exitIntent || "Leaving already? Any last questions?", false);
-    }
-  });
-
-  // Scroll depth (when user scrolls 60% of page)
-  window.addEventListener("scroll", () => {
-    if (!window.__247CONVO_SCROLL_SHOWN &&
-        (window.scrollY / (document.body.scrollHeight - window.innerHeight)) > 0.6
-    ) {
-      window.__247CONVO_SCROLL_SHOWN = true;
-      showMessage(config.proactive?.scrollDepth || "Questions so far? Ask me!", false);
-    }
-  });
-
-  }
 
 
 function waitForChronoThenRun() {
