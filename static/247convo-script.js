@@ -955,6 +955,7 @@ if (leadSubmitted) {
 // All other input just goes to normal chat/AI
 await sendMessage(txt);
 
+} // <-- ADD THIS CLOSING BRACE
 
 function stripTags(str) {
   const div = document.createElement('div');
@@ -1053,8 +1054,7 @@ hideBadge();        // Hide badge
         ["click","scroll","mousemove","keydown"].forEach(ev =>
       window.addEventListener(ev, playOnce, { once: true })
     ); // <-- THIS IS THE END OF RUN FUNCTION!
-} // <-- ADD THIS CLOSING BRACE
-
+  } // <--- CLOSES THE async function run() BLOCK
 
 function waitForChronoThenRun() {
   if (typeof chrono !== "undefined") {
