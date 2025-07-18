@@ -18,17 +18,19 @@ window.__247CONVO_CONFIG__ = {
   client_id: "therichjoe",
   meetingDuration: "30",
   // === 1. Personalized Greetings ===
-  "greetingTextMorning": "Good morning!",
-  "greetingTextAfternoon": "Good afternoon!",
-  "greetingTextEvening": "Good evening!",
-  "greetingIntro": "What’s your name?",       // Used after greeting for first-time users
-  "askEmail": "Now, what’s your email?",      // After name
+  greetingTextMorning: "Good morning!",
+  greetingTextAfternoon: "Good afternoon!",
+  greetingTextEvening: "Good evening!",
+  greetingIntro: "What’s your name?",       // Used after greeting for first-time users
+  askEmail: "Now, what’s your email?",      // After name
+  bubbleMessage: "Need help? Ask JoeBot.",
   
   // === 2. Proactive Messages ===
   "proactive": {
-    "timeOnPage": "How can I help you today?",
-    "exitIntent": "Leaving already? Any last questions?",
-    "scrollDepth": "Questions so far? Ask me!"
+  "bubble": "Not sure where to start? Click here to chat!",
+  "timeOnPage": "How can I help you today?",
+  "exitIntent": "Leaving already? Any last questions?",
+  "scrollDepth": "Questions so far? Ask me!"
   },
 
   // === 3. Rating Widget ===

@@ -13,38 +13,31 @@
   "quickOption3": "Book Appointment",
   "token": "247convobot-2025",
   "client_id": "therichjoe",
+  "bubbleMessage": "Need help? Ask JoeBot.",
   "meetingDuration": "30",
-  "bookingProvider": "google"
-"availableHours": {
-  "monday":   ["09:00", "17:00"],
-  "tuesday":  ["09:00", "17:00"],
-  "wednesday":["09:00", "17:00"],
-  "thursday": ["09:00", "17:00"],
-  "friday":   ["09:00", "15:00"]
-}
-  // === Personalized Greetings ===
+  "bookingProvider": "google",
+  "availableHours": {
+    "monday": ["09:00", "17:00"],
+    "tuesday": ["09:00", "17:00"],
+    "wednesday": ["09:00", "17:00"],
+    "thursday": ["09:00", "17:00"],
+    "friday": ["09:00", "15:00"]
+  },
   "greetingTextMorning": "Good morning!",
   "greetingTextAfternoon": "Good afternoon!",
   "greetingTextEvening": "Good evening!",
   "greetingIntro": "What’s your name?",
   "askEmail": "Now, what’s your email?",
-
-  // === Proactive Messages ===
   "proactive": {
+    "bubble": "Not sure where to start? Click here to chat!",
     "timeOnPage": "How can I help you today?",
     "exitIntent": "Leaving already? Any last questions?",
     "scrollDepth": "Questions so far? Ask me!"
   },
-
-  // === Rating Widget ===
   "ratingPrompt": "How would you rate this experience?",
   "ratingThanks": "Thank you for your feedback!",
   "ratingError": "⚠️ Couldn't send your rating.",
-
-  // === Memory & History ===
   "memoryLimit": 5,
-
-  // === Handoff to Human Agent ===
   "handoff": {
     "intro": "Connecting you to a human agent...",
     "whatsapp": "<a href='https://wa.me/234XXXXXXXXXX'>Chat with us on WhatsApp</a>"

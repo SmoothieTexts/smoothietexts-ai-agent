@@ -139,7 +139,63 @@ function getPersonalizedGreeting() {
     if (header) header.innerText = `${brandName} Assistant`;
     if (avatar && avatarUrl) avatar.style.backgroundImage = `url('${avatarUrl}')`;
     if (support) support.href = supportUrl;
-    if (tooltip) tooltip.innerText = `Need help? Ask ${chatbotName}.`;
+    if (tooltip) {
+  tooltip.innerText = config.bubbleMessage || `Need help? Ask ${chatbotName}.`;
+}
+
+// --- Proactive, Exit-Intent, and Scroll-Depth Messages on the chat bubble (tooltip), BEFORE chat is opened ---
+
+// Time-on-page: Show proactive bubble after 35s if chat not opened
+setTimeout(() => {
+  const popup = getEl("chatPopup");
+  if (
+    tooltip &&
+    popup && !popup.classList.contains("open") &&
+    !window.__247CONVO_BUBBLE_MSG_SHOWN
+  ) {
+    tooltip.innerText =
+      (config.proactive && config.proactive.bubble) ||
+      config.bubbleMessage ||
+      `Need help? Ask ${chatbotName}.`;
+    window.__247CONVO_BUBBLE_MSG_SHOWN = true;
+  }
+}, 35000);
+
+// Exit intent: Show proactive bubble when user moves mouse out the top
+document.addEventListener("mouseleave", e => {
+  const popup = getEl("chatPopup");
+  if (
+    tooltip &&
+    e.clientY < 10 &&
+    popup && !popup.classList.contains("open") &&
+    !window.__247CONVO_BUBBLE_MSG_EXIT_SHOWN
+  ) {
+    tooltip.innerText =
+      (config.proactive && config.proactive.exitIntent) ||
+      config.bubbleMessage ||
+      `Need help? Ask ${chatbotName}.`;
+    window.__247CONVO_BUBBLE_MSG_EXIT_SHOWN = true;
+  }
+});
+
+// Scroll depth: Show proactive bubble if user scrolls 60% of the page
+window.addEventListener("scroll", () => {
+  const popup = getEl("chatPopup");
+  if (
+    tooltip &&
+    popup && !popup.classList.contains("open") &&
+    !window.__247CONVO_BUBBLE_MSG_SCROLL_SHOWN &&
+    (window.scrollY / (document.body.scrollHeight - window.innerHeight)) > 0.6
+  ) {
+    tooltip.innerText =
+      (config.proactive && config.proactive.scrollDepth) ||
+      config.bubbleMessage ||
+      `Need help? Ask ${chatbotName}.`;
+    window.__247CONVO_BUBBLE_MSG_SCROLL_SHOWN = true;
+  }
+});
+
+
     // document.title = `${brandName} Chat`;
 
 function showMessage(text, isUser = false, isTyping = false, id = "", isError = false) {
