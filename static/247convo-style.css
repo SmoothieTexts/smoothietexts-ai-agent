@@ -35,11 +35,12 @@ body {
   position: fixed;
   bottom: 90px;
   right: 20px;
-  background: #fff;
-  color: #222;
+  background: #e0edff;          /* Subtle blue background for attention */
+  color: #2563eb;               /* Strong, modern blue text */
+  font-weight: 600;
   padding: 8px 12px;
-  border-radius: 8px;
-  font-size: 0.9rem;
+  border-radius: 12px;
+  font-size: 16px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   z-index: 1000;
 }
