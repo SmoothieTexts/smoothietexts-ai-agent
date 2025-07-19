@@ -197,7 +197,7 @@ function insertRatingWidget() {
           })
         });
       } catch (err) {
-        showMessage(`${config.ratingError || "⚠️ Couldn't send your rating."}`);
+        botReply(`${config.ratingError || "⚠️ Couldn't send your rating."}`);
       }
     };
   });
@@ -317,6 +317,11 @@ function showMessage(text, isUser = false, isTyping = false, id = "", isError = 
   }, 600);
 }
 
+
+function botReply(text, isError = false) {
+  showMessage(`${chatbotName}: ${text}`, false, false, "", isError);
+  replySound?.play();
+}
 
     function insertQuickOptions() {
       if (!chatBox) return;
@@ -498,7 +503,7 @@ async function showAvailableSlotsPicker(date, busySlots, config) {
 
 async function startBookingFlow() {
   if (!leadSubmitted) {
-    return showMessage("Before booking, may I have your name and email?");
+    return botReply("Before booking, may I have your name and email?");
   }
 
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -511,22 +516,21 @@ if (availability) {
     const [start, end] = availability[day];
     return `${day.charAt(0).toUpperCase() + day.slice(1)}: ${start} - ${end}`;
   }).join('<br>');
-  showMessage(
+  botReply(
     `📆 <b>Available booking windows</b>:<br>${windows}<br><br>What date and time would you like? <br><i>(e.g., 2025-08-01 4 PM or 'next Friday at noon')</i>`
   );
 } else {
-  showMessage(
+  botReply(
     "What date and time would you like? <br><i>(e.g., 2025-08-01 4 PM or 'next Friday at noon')</i>"
   );
 }
 const rawInput = await waitForUserInput();
+showMessage(rawInput, true); // Always show user input first!
 if (userCancelled(rawInput)) {
     resetBookingState();
   await sendMessage("Booking cancelled."); // <== ADD THIS LINE!
-  showMessage("No problem, I’ve cancelled the booking. Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
 const feedback = await waitForUserInput();
 if (userCancelled(feedback)) {
-  showMessage("No problem, you can book any time. What else can I help with?");
   insertQuickOptions();
   return;
 }
@@ -546,23 +550,21 @@ showMessage(rawInput, true);
   // ✅ Chrono fallback only if native Date fails
   if (!parsed || isNaN(parsed.getTime())) {
     if (typeof chrono === "undefined" || typeof chrono.parseDate !== "function") {
-      showMessage("⚠️ Internal error: time parser not available.");
+      botReply("⚠️ Internal error: time parser not available.");
       return;
     }
 
     parsed = chrono.parseDate(rawInput);
     if (!parsed || isNaN(parsed.getTime())) {
-showMessage("❌ I couldn’t understand the time. Please pick manually:");
+botReply("❌ I couldn’t understand the time. Please pick manually:");
 const today = new Date();
 const iso = today.toISOString().split("T")[0];
 const res = await fetch(`${API_BASE}/availability/${getClientID()}?date=${iso}`);
 const data = await res.json();
 parsed = await showAvailableSlotsPicker(today, data.busy || [], config);
 if (!parsed) {
-  showMessage("No problem, I’ve cancelled the booking. Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
 const feedback = await waitForUserInput();
 if (userCancelled(feedback)) {
-  showMessage("No problem, you can book any time. What else can I help with?");
   insertQuickOptions();
   return;
 }
@@ -578,17 +580,15 @@ await sendMessage(feedback);
 
   // ❌ If all fail, show fallback picker
   if (!parsed || isNaN(parsed.getTime())) {
-showMessage("❌ I couldn’t understand the time. Please pick manually:");
+botReply("❌ I couldn’t understand the time. Please pick manually:");
 const today = new Date();
 const iso = today.toISOString().split("T")[0];
 const res = await fetch(`${API_BASE}/availability/${getClientID()}?date=${iso}`);
 const data = await res.json();
 parsed = await showAvailableSlotsPicker(today, data.busy || [], config);
 if (!parsed) {
-  showMessage("No problem, I've cancelled the booking. Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
 const feedback = await waitForUserInput();
 if (userCancelled(feedback)) {
-  showMessage("No problem, you can book any time. What else can I help with?");
   insertQuickOptions();
   return;
 }
@@ -615,21 +615,19 @@ const startMinutes = startH * 60 + startM;
 const endMinutes = endH * 60 + endM;
 
 if (selectedMinutes < startMinutes || selectedMinutes > endMinutes) {
-  return showMessage(`❌ That time is outside your availability for ${day}. Please try a different time.`);
+  return botReply(`❌ That time is outside your availability for ${day}. Please try a different time.`);
 }
 
   }
 
   // 📝 Ask for purpose
-  showMessage("What’s the purpose of this meeting?");
+  botReply("What’s the purpose of this meeting?");
 const purpose = await waitForUserInput();
 if (userCancelled(purpose)) {
     resetBookingState();
   await sendMessage("Booking cancelled."); // <== ADD THIS LINE!
-  showMessage("No Problem, I've cancelled the booking. Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
 const feedback = await waitForUserInput();
 if (userCancelled(feedback)) {
-  showMessage("No problem, you can book any time. What else can I help with?");
   insertQuickOptions();
   return;
 }
@@ -646,16 +644,14 @@ showMessage(purpose, true);
 
   // ✅ Show full summary and ask for final confirmation
   const duration = config.meetingDuration || 40;
-  showMessage(`📅 Meeting at: ${parsed.toLocaleString()} (${timezone})\n📝 Purpose: ${purpose}\n⏱️ Duration: ${duration} minutes`);
-  showMessage("Confirm this booking? (yes / no)");
+  botReply(`📅 Meeting at: ${parsed.toLocaleString()} (${timezone})\n📝 Purpose: ${purpose}\n⏱️ Duration: ${duration} minutes`);
+  botReply("Confirm this booking? (yes / no)");
 const confirm = await waitForUserInput();
 if (userCancelled(confirm) || !/^y(es)?$/i.test(confirm)) {
     resetBookingState();
   await sendMessage("Booking cancelled."); // <== ADD THIS LINE!
-  showMessage("Okay, booking canceled. Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
 const feedback = await waitForUserInput();
 if (userCancelled(feedback)) {
-  showMessage("No problem, you can book any time. What else can I help with?");
   insertQuickOptions();
   return;
 }
@@ -682,6 +678,7 @@ console.log("Booking payload:", {
 
   // ✅ Send booking request
   showMessage("Booking your appointment…", false, true);
+replySound?.play();
   try {
     const res = await fetch(`${API_BASE}/book`, {
       method: "POST",
@@ -712,16 +709,14 @@ if (!res.ok) {
 
 // Handle backend error: Outside available hours
 if (typeof msg === "string" && msg.toLowerCase().includes("outside available hours")) {
-  showMessage("The time you selected is outside our available hours. Would you like to pick another time? (yes/no)");
+  botReply("The time you selected is outside our available hours. Would you like to pick another time? (yes/no)");
   const response = await waitForUserInput();
   if (userCancelled(response)) {
       resetBookingState();
   await sendMessage("Booking cancelled."); // <== ADD THIS LINE!
     // (Optional) Ask why user cancelled:
-    // showMessage("Booking cancelled. Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
 const feedback = await waitForUserInput();
 if (userCancelled(feedback)) {
-  showMessage("No problem, you can book any time. What else can I help with?");
   insertQuickOptions();
   return;
 }
@@ -738,10 +733,8 @@ await sendMessage(feedback);
     const data2 = await res2.json();
     const picked = await showAvailableSlotsPicker(today, data2.busy || [], config);
     if (!picked) {
-  showMessage("I've cancelled the booking. Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
 const feedback = await waitForUserInput();
 if (userCancelled(feedback)) {
-  showMessage("No problem, you can book any time. What else can I help with?");
   insertQuickOptions();
   return;
 }
@@ -758,10 +751,9 @@ await sendMessage(feedback);
     // fallback, treat as cancel
       resetBookingState();
   await sendMessage("Booking cancelled."); // <== ADD THIS LINE!
-    showMessage("Okay, no booking for now. What else can I help with?");
+    botReply("Okay, no booking for now. What else can I help with?");
 const feedback = await waitForUserInput();
 if (userCancelled(feedback)) {
-  showMessage("No problem, you can book any time. What else can I help with?");
   insertQuickOptions();
   return;
 }
@@ -783,15 +775,15 @@ await sendMessage(feedback);
   // 🧠 Check for suggested time (e.g. backend gives next available)
   if (err && typeof err === "object" && err.suggested) {
     const suggestedDate = new Date(err.suggested);
-    showMessage(`⚠️ ${msg}`, false, false, "", true);
-    showMessage(`📅 Next available time: ${suggestedDate.toLocaleString()} — Want to book this instead? (yes / no)`);
+    botReply(`⚠️ ${msg}`, false, false, "", true);
+    botReply(`📅 Next available time: ${suggestedDate.toLocaleString()} — Want to book this instead? (yes / no)`);
     const retry = await waitForUserInput();
     userInput.value = "";
     showMessage(retry, true);
 
     if (/^y(es)?$/i.test(retry)) {
       // If user wants to use suggested, ask if they want to reuse the previous purpose
-      showMessage("Use the same purpose as before? (yes / no)");
+      botReply("Use the same purpose as before? (yes / no)");
       const useSamePurpose = await waitForUserInput();
       userInput.value = "";
       showMessage(useSamePurpose, true);
@@ -804,7 +796,7 @@ await sendMessage(feedback);
         });
       } else {
         // Ask for new purpose
-        showMessage("What's the new purpose of this meeting?");
+        botReply("What's the new purpose of this meeting?");
         const newPurpose = await waitForUserInput();
         userInput.value = "";
         showMessage(newPurpose, true);
@@ -814,7 +806,7 @@ await sendMessage(feedback);
         });
       }
     } else {
-      showMessage("Okay, you can pick another time.");
+      botReply("Okay, you can pick another time.");
       // Continue to available time picker below
     }
   }
@@ -826,9 +818,9 @@ await sendMessage(feedback);
       const [start, end] = availability[day];
       return `${day.charAt(0).toUpperCase() + day.slice(1)}: ${start} - ${end}`;
     }).join('<br>');
-    showMessage(`⚠️ ${msg}<br><br>📆 <b>Available booking windows</b>:<br>${windows}<br><br>Let’s pick a valid time now:`);
+    botReply(`⚠️ ${msg}<br><br>📆 <b>Available booking windows</b>:<br>${windows}<br><br>Let’s pick a valid time now:`);
   } else {
-    showMessage(`⚠️ ${msg}<br>Let’s pick a valid time now:`);
+    botReply(`⚠️ ${msg}<br>Let’s pick a valid time now:`);
   }
 
   // 🔥 Instantly show available times for today, let user pick
@@ -837,10 +829,10 @@ await sendMessage(feedback);
   const res2 = await fetch(`${API_BASE}/availability/${getClientID()}?date=${iso}`);
   const data2 = await res2.json();
   const picked = await showAvailableSlotsPicker(today, data2.busy || [], config);
-  if (!picked) return showMessage("❌ Booking cancelled.");
+  if (!picked) return botReply("❌ Booking cancelled.");
 
   // Ask if they want to reuse last purpose or enter a new one
-  showMessage("Would you like to use the same purpose as before? (yes / no)");
+  botReply("Would you like to use the same purpose as before? (yes / no)");
   const reusePurpose = await waitForUserInput();
   userInput.value = "";
   showMessage(reusePurpose, true);
@@ -849,7 +841,7 @@ await sendMessage(feedback);
     // Book with same purpose
     return await bookSlot({ datetime: picked.toISOString(), purpose: lastPurpose });
   } else {
-    showMessage("What's the new purpose of this meeting?");
+    botReply("What's the new purpose of this meeting?");
     const newPurpose = await waitForUserInput();
     userInput.value = "";
     showMessage(newPurpose, true);
@@ -860,13 +852,13 @@ await sendMessage(feedback);
   // SUCCESS: Got confirmation link
   const { confirmation_link } = await res.json();
   chatLog += `Booked ${datetime}: ${confirmation_link}\n`;
-  showMessage(`✅ Your appointment is booked for ${parsed.toLocaleString()}!\n${linkify(confirmation_link)}`);
-  showMessage("Anything else I can help you with?");
+  botReply(`✅ Your appointment is booked for ${parsed.toLocaleString()}!\n${linkify(confirmation_link)}`);
+  botReply("Anything else I can help you with?");
   insertQuickOptions();
 insertRatingWidget();
 
 } catch (error) {
-  showMessage("⚠️ Couldn’t complete booking. Please try again.", false, false, "", true);
+  botReply("⚠️ Couldn’t complete booking. Please try again.", false, false, "", true);
 }
 // THIS BRACE BELOW is critical! It closes startBookingFlow
 } 
@@ -879,16 +871,14 @@ async function bookSlot({ datetime, purpose }) {
   const duration = config.meetingDuration || 40;
 
   // Confirm booking
-  showMessage(`📅 Suggested: ${parsed.toLocaleString()} (${timezone})\n📝 Purpose: ${purpose}\n⏱️ Duration: ${duration} minutes`);
-  showMessage("Book this time? (yes / no)");
+  botReply(`📅 Suggested: ${parsed.toLocaleString()} (${timezone})\n📝 Purpose: ${purpose}\n⏱️ Duration: ${duration} minutes`);
+  botReply("Book this time? (yes / no)");
 const confirm = await waitForUserInput();
 if (userCancelled(confirm) || !/^y(es)?$/i.test(confirm)) {
     resetBookingState();
   await sendMessage("Booking cancelled."); // <== ADD THIS LINE!
-  showMessage("Okay booking canceled. Out of curiosity, was there a reason you decided not to book right now? If you want, you can let me know—or just say anything else!");
 const feedback = await waitForUserInput();
 if (userCancelled(feedback)) {
-  showMessage("No problem, you can book any time. What else can I help with?");
   insertQuickOptions();
   return;
 }
@@ -902,6 +892,7 @@ userInput.value = "";
 showMessage(confirm, true);
 
   showMessage("Booking your appointment…", false, true);
+replySound?.play();
   try {
     const res = await fetch(`${API_BASE}/book`, {
       method: "POST",
@@ -928,18 +919,18 @@ if (!res.ok) {
   } catch (e) {
     msg = await res.text() || "Unknown error";
   }
-  return showMessage(`⚠️ ${msg}`);
+  return botReply(`⚠️ ${msg}`);
 }
 
 
     const { confirmation_link } = await res.json();
     chatLog += `Booked ${datetime}: ${confirmation_link}\n`;
-    showMessage(`✅ Your appointment is booked for ${parsed.toLocaleString()}!\n${linkify(confirmation_link)}`);
-    showMessage("Anything else I can help you with?");
+    botReply(`✅ Your appointment is booked for ${parsed.toLocaleString()}!\n${linkify(confirmation_link)}`);
+    botReply("Anything else I can help you with?");
     insertQuickOptions();
 insertRatingWidget();
 } catch (error) {
-  showMessage("⚠️ Couldn’t complete booking. Please try again.", false, false, "", true);
+  botReply("⚠️ Couldn’t complete booking. Please try again.", false, false, "", true);
 }
 }
 
@@ -954,7 +945,7 @@ insertRatingWidget();
   if (/start over/i.test(txt)) {
     resetBookingState();
     await sendMessage("Booking cancelled."); // sync to backend/context
-    showMessage("Booking process reset. What else can I help you with?");
+    botReply("Booking process reset. What else can I help you with?");
     insertQuickOptions();
     return;
   }
@@ -964,16 +955,16 @@ insertRatingWidget();
         if (collecting === "name") {
           userName = txt;
           collecting = "email";
-          return showMessage(`${getPersonalizedGreeting()} ${config.askEmail || "Now, what’s your email?"}`);
+          return botReply(`${getPersonalizedGreeting()} ${config.askEmail || "Now, what’s your email?"}`);
         } else if (collecting === "email") {
           userEmail = txt;
 if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userEmail)) {
-  showMessage("❌ Please enter a valid email address.", false, false, "", true);
+  botReply("❌ Please enter a valid email address.", false, false, "", true);
   return;
 }
 leadSubmitted = true;
 collecting = "done";
-showMessage(`✅ Thanks, ${userName}! I’m ${chatbotName}. How can I help?`);
+botReply(`✅ Thanks, ${userName}! I’m ${chatbotName}. How can I help?`);
 return insertQuickOptions();
 
         }
@@ -991,7 +982,7 @@ if (leadSubmitted) {
 
   // Handoff to human agent if user requests it
   if (/human|agent|real person|support|help/i.test(txt)) {
-    showMessage(config.handoff?.intro || "Connecting you to a human agent...", false);
+    botReply(config.handoff?.intro || "Connecting you to a human agent...", false);
     if (config.handoff?.whatsapp) showMessage(config.handoff.whatsapp, false);
     return;
   }
@@ -1036,7 +1027,7 @@ function stripTags(str) {
         });
         const wrapper = getEl(`${id}-wrapper`);
         if (wrapper) wrapper.remove();
-        if (!res.ok) return showMessage("⚠️ Server error. Please try again.", false);
+        if (!res.ok) return botReply("⚠️ Server error. Please try again.", false);
         const data = await res.json();
 const safeAnswer =
   typeof data.answer === "string"
@@ -1071,7 +1062,7 @@ hideBadge();        // Hide badge
       t.style.display = open ? "block" : "none";
       if (!open) {
         bubbleSound?.play();
-        if (!leadSubmitted) showMessage(getPersonalizedGreeting() + " " + (config.greetingIntro || "What’s your name?"));
+        if (!leadSubmitted) botReply(getPersonalizedGreeting() + " " + (config.greetingIntro || "What’s your name?"));
 
       }
     };
