@@ -7,7 +7,7 @@
   const API_BASE         = "https://two47cbackend.onrender.com";
 
   function linkify(text) {
-    return text.replace(/(https?:\/\/[^\s]+)/g, url => `<a href="${url}" target="_blank" rel="noopener">${url}</a>`);
+    return text.replace(/(https?:\/\/[^\s]+)/g, url => <a href="${url}" target="_blank" rel="noopener">${url}</a>);
   }
 
   function getClientID() {
@@ -46,6 +46,11 @@
     if (err.error && typeof err.error === "object") return getErrorMsg(err.error);
     return JSON.stringify(err);
   }
+
+function enableInput() {
+  userInput.disabled = false;
+  sendBtn.disabled = false;
+}
 
 function userCancelled(txt) {
   const cancelPhrases = [
@@ -179,9 +184,9 @@ function insertRatingWidget() {
   const div = document.createElement('div');
   div.id = "chatRatingWidget";
   div.style = "margin:1em 0;text-align:center;";
-  let html = `<div style="font-size:1.1em;margin-bottom:4px;">${config.ratingPrompt || "How would you rate this experience?"}</div>`;
+  let html = <div style="font-size:1.1em;margin-bottom:4px;">${config.ratingPrompt || "How would you rate this experience?"}</div>;
   for (let i = 1; i <= 5; i++) {
-    html += `<button data-rate="${i}" style="font-size:2em;cursor:pointer;border:none;background:none;">⭐️</button>`;
+    html += <button data-rate="${i}" style="font-size:2em;cursor:pointer;border:none;background:none;">⭐️</button>;
   }
   div.innerHTML = html;
   chatBox.appendChild(div);
@@ -189,9 +194,9 @@ function insertRatingWidget() {
   div.querySelectorAll('button[data-rate]').forEach(btn => {
     btn.onclick = async (e) => {
       const score = e.target.getAttribute("data-rate");
-      div.innerHTML = `${config.ratingThanks || "Thank you for your feedback!"}`;
+      div.innerHTML = ${config.ratingThanks || "Thank you for your feedback!"};
       try {
-        await fetchWithTimeout(`${API_BASE}/rating`, {
+        await fetchWithTimeout(${API_BASE}/rating, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -204,7 +209,8 @@ function insertRatingWidget() {
         });
       } catch (err) {
         console.error("[insertRatingWidget] Rating error:", err);
-        botReply(`${config.ratingError || "⚠️ Couldn't send your rating."}`);
+        botReply(${config.ratingError || "⚠️ Couldn't send your rating."});
+	enableInput();
       }
     };
   });
@@ -216,17 +222,17 @@ function getPersonalizedGreeting() {
   const hour = new Date().getHours();
   if (hour >= 12 && hour < 18) greet = config.greetingTextAfternoon || "Good afternoon!";
   if (hour >= 18) greet = config.greetingTextEvening || "Good evening!";
-  if (userName) greet += ` ${userName}`;
+  if (userName) greet +=  ${userName};
   return greet;
 }
 
 
     // Branding setup
-    if (header) header.innerText = `${brandName} Assistant`;
-    if (avatar && avatarUrl) avatar.style.backgroundImage = `url('${avatarUrl}')`;
+    if (header) header.innerText = ${brandName} Assistant;
+    if (avatar && avatarUrl) avatar.style.backgroundImage = url('${avatarUrl}');
     if (support) support.href = supportUrl;
     if (tooltip) {
-  tooltip.innerText = config.bubbleMessage || `Need help? Ask ${chatbotName}.`;
+  tooltip.innerText = config.bubbleMessage || Need help? Ask ${chatbotName}.;
 }
 
 // --- Proactive, Exit-Intent, and Scroll-Depth Messages on the chat bubble (tooltip), BEFORE chat is opened ---
@@ -241,7 +247,7 @@ setTimeout(() => {
   ) {
 const provText = (config.proactive && config.proactive.bubble) ||
   config.bubbleMessage ||
-  `Need help? Ask ${chatbotName}.`;
+  Need help? Ask ${chatbotName}.;
 
 typewriterTooltip(provText); // <-- Reveal effect for message
 shakeBubble();               // <-- Bubble bounce
@@ -263,7 +269,7 @@ document.addEventListener("mouseleave", e => {
   ) {
 const provText = (config.proactive && config.proactive.exitIntent) ||
   config.bubbleMessage ||
-  `Need help? Ask ${chatbotName}.`;
+  Need help? Ask ${chatbotName}.;
 
 typewriterTooltip(provText); // <-- Reveal effect for message
 shakeBubble();               // <-- Bubble bounce
@@ -285,7 +291,7 @@ window.addEventListener("scroll", () => {
   ) {
 const provText = (config.proactive && config.proactive.scrollDepth) ||
   config.bubbleMessage ||
-  `Need help? Ask ${chatbotName}.`;
+  Need help? Ask ${chatbotName}.;
 
 typewriterTooltip(provText); // <-- Reveal effect for message
 shakeBubble();               // <-- Bubble bounce
@@ -297,26 +303,26 @@ showBadge(1);                // <-- Show 1 notification badge
 });
 
 
-    // document.title = `${brandName} Chat`;
+    // document.title = ${brandName} Chat;
 
 function showMessage(text, isUser = false, isTyping = false, id = "", isError = false) {
   if (!chatBox) return;
   const cls = isUser ? "user" : "bot";
   const errorClass = isError ? "error" : "";
   const avatarHTML = (!isUser && avatarUrl)
-    ? `<div class="bot-avatar" style="background-image:url('${avatarUrl}')"></div>`
-    : (!isUser ? `<div class="bot-avatar default-avatar"></div>` : "");
-  const typingHTML = isTyping ? `<span class="typing"><span></span><span></span><span></span></span>` : "";
-  const tsHTML = !isTyping ? `<span class="timestamp">${now()}</span>` : "";
-  const wrapperID = id ? `id="${id}-wrapper"` : "";
-  const bubbleID  = id ? `id="${id}"` : "";
+    ? <div class="bot-avatar" style="background-image:url('${avatarUrl}')"></div>
+    : (!isUser ? <div class="bot-avatar default-avatar"></div> : "");
+  const typingHTML = isTyping ? <span class="typing"><span></span><span></span><span></span></span> : "";
+  const tsHTML = !isTyping ? <span class="timestamp">${now()}</span> : "";
+  const wrapperID = id ? id="${id}-wrapper" : "";
+  const bubbleID  = id ? id="${id}" : "";
 
-  chatBox.insertAdjacentHTML("beforeend", `
+  chatBox.insertAdjacentHTML("beforeend", 
     <div class="msg-wrapper ${cls} new" ${wrapperID}>
       ${avatarHTML}
       <p class="${cls} ${errorClass}" ${bubbleID}>${text}${typingHTML}${tsHTML}</p>
     </div>
-  `);
+  );
   chatBox.scrollTop = chatBox.scrollHeight;
   setTimeout(() => {
     const last = chatBox.querySelector(".msg-wrapper.new");
@@ -326,7 +332,7 @@ function showMessage(text, isUser = false, isTyping = false, id = "", isError = 
 
 
 function botReply(text, isError = false) {
-  showMessage(`${chatbotName}: ${text}`, false, false, "", isError);
+  showMessage(${chatbotName}: ${text}, false, false, "", isError);
   replySound?.play();
 }
 
@@ -334,13 +340,13 @@ function insertQuickOptions() {
   if (!chatBox) return;
   // 💡 Remove any existing quick options before adding new ones
   getEl("quickOpts")?.remove();
-  chatBox.insertAdjacentHTML("beforeend", `
+  chatBox.insertAdjacentHTML("beforeend", 
     <div class="quick-options" id="quickOpts">
       <button onclick="quickAsk('${quickOption1}')">${quickOption1}</button>
       <button onclick="quickAsk('${quickOption2}')">${quickOption2}</button>
       <button onclick="quickAsk('${quickOption3}')">${quickOption3}</button>
     </div>
-  `);
+  );
   chatBox.scrollTop = chatBox.scrollHeight;
 }
 
@@ -382,7 +388,7 @@ function fetchWithTimeout(resource, options = {}) {
 
 
 async function fetchBusyTimes(dateStr) {
-  const res = await fetchWithTimeout(`${API_BASE}/availability/${getClientID()}?date=${dateStr}`);
+  const res = await fetchWithTimeout(${API_BASE}/availability/${getClientID()}?date=${dateStr});
   if (!res.ok) return null;
   const data = await res.json();
   return data.busy || [];
@@ -390,8 +396,8 @@ async function fetchBusyTimes(dateStr) {
 
 
 async function getAvailableSlots(dateStr) {
-const res = await fetchWithTimeout(`${API_BASE}/availability/${client_id}?date=${dateStr}&token=${token}`, {
-  headers: { "Authorization": `Bearer ${token}` }
+const res = await fetchWithTimeout(${API_BASE}/availability/${client_id}?date=${dateStr}&token=${token}, {
+  headers: { "Authorization": Bearer ${token} }
 });
   if (!res.ok) return [];
   const data = await res.json();
@@ -403,11 +409,11 @@ async function showDateTimePicker() {
   return new Promise(async resolve => {
     const wrapper = document.createElement("div");
     wrapper.style.margin = "1em 0";
-    wrapper.innerHTML = `
+    wrapper.innerHTML = 
       <label>Select a date:</label><br/>
       <input type="date" id="manualDate" style="padding:5px;margin:5px 0;" />
       <div id="slotButtons" style="margin-top: 1em;"></div>
-    `;
+    ;
     chatBox.appendChild(wrapper);
     chatBox.scrollTop = chatBox.scrollHeight;
 
@@ -415,18 +421,18 @@ async function showDateTimePicker() {
     const slotContainer = wrapper.querySelector("#slotButtons");
 
     async function fetchAndRenderSlots(dateStr) {
-      slotContainer.innerHTML = `<span>Loading available times…</span>`;
+      slotContainer.innerHTML = <span>Loading available times…</span>;
 
       try {
-        const res = await fetchWithTimeout(`${API_BASE}/availability/${client_id}?date=${dateStr}&token=${token}`);
+        const res = await fetchWithTimeout(${API_BASE}/availability/${client_id}?date=${dateStr}&token=${token});
         const data = await res.json();
 
         if (!data.slots || data.slots.length === 0) {
-          slotContainer.innerHTML = `<span>❌ No available time slots on this date.</span>`;
+          slotContainer.innerHTML = <span>❌ No available time slots on this date.</span>;
           return;
         }
 
-        slotContainer.innerHTML = `<p>Pick a time:</p>`;
+        slotContainer.innerHTML = <p>Pick a time:</p>;
         data.slots.forEach(slot => {
           const btn = document.createElement("button");
           btn.textContent = new Date(slot).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -438,7 +444,7 @@ async function showDateTimePicker() {
           slotContainer.appendChild(btn);
         });
       } catch (err) {
-        slotContainer.innerHTML = `<span>⚠️ Couldn’t load availability.</span>`;
+        slotContainer.innerHTML = <span>⚠️ Couldn’t load availability.</span>;
       }
     }
 
@@ -482,9 +488,9 @@ async function showAvailableSlotsPicker(date, busySlots, config) {
     }
 
     if (slots.length === 0) {
-      wrapper.innerHTML = `<p>😞 No available slots today.</p>`;
+      wrapper.innerHTML = <p>😞 No available slots today.</p>;
     } else {
-      wrapper.innerHTML = `<p>📅 Available times for ${date.toDateString()}:</p>`;
+      wrapper.innerHTML = <p>📅 Available times for ${date.toDateString()}:</p>;
       for (const s of slots) {
         const btn = document.createElement("button");
         btn.innerText = s.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -507,7 +513,7 @@ async function showAvailableSlotsPicker(date, busySlots, config) {
       picker.onchange = async () => {
         const pickedDate = new Date(picker.value);
         const iso = pickedDate.toISOString().split("T")[0];
-        const res = await fetchWithTimeout(`${API_BASE}/availability/${getClientID()}?date=${iso}`);
+        const res = await fetchWithTimeout(${API_BASE}/availability/${getClientID()}?date=${iso});
         const data = await res.json();
         const next = await showAvailableSlotsPicker(pickedDate, data.busy || [], config);
         resolve(next);
@@ -526,7 +532,9 @@ async function showAvailableSlotsPicker(date, busySlots, config) {
 
 async function startBookingFlow() {
   if (!leadSubmitted) {
-    return botReply("Before booking, may I have your name and email?");
+    botReply("Before booking, may I have your name and email?");
+    enableInput();
+    return;
   }
 
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -536,15 +544,17 @@ async function startBookingFlow() {
     const days = Object.keys(availability);
     const windows = days.map(day => {
       const [start, end] = Array.isArray(availability[day]) ? availability[day] : ["09:00", "17:00"];
-      return `${day.charAt(0).toUpperCase() + day.slice(1)}: ${start} - ${end}`;
+      return ${day.charAt(0).toUpperCase() + day.slice(1)}: ${start} - ${end};
     }).join('<br>');
     botReply(
-      `📆 <b>Available booking windows</b>:<br>${windows}<br><br>What date and time would you like? <br><i>(e.g., 2025-08-01 4 PM or 'next Friday at noon')</i>`
+      📆 <b>Available booking windows</b>:<br>${windows}<br><br>What date and time would you like? <br><i>(e.g., 2025-08-01 4 PM or 'next Friday at noon')</i>
     );
+	enableInput();
   } else {
     botReply(
       "What date and time would you like? <br><i>(e.g., 2025-08-01 4 PM or 'next Friday at noon')</i>"
     );
+	enableInput();
   }
 
 const rawInput = await waitForUserInput();
@@ -578,15 +588,17 @@ showMessage(rawInput, true);
   if (!parsed || isNaN(parsed.getTime())) {
     if (typeof chrono === "undefined" || typeof chrono.parseDate !== "function") {
       botReply("⚠️ Internal error: time parser not available.");
+	enableInput();
       return;
     }
 
     parsed = chrono.parseDate(rawInput);
     if (!parsed || isNaN(parsed.getTime())) {
 botReply("❌ I couldn’t understand the time. Please pick manually:");
+enableInput();
 const today = new Date();
 const iso = today.toISOString().split("T")[0];
-const res = await fetchWithTimeout(`${API_BASE}/availability/${getClientID()}?date=${iso}`);
+const res = await fetchWithTimeout(${API_BASE}/availability/${getClientID()}?date=${iso});
 const data = await res.json();
 parsed = await showAvailableSlotsPicker(today, data.busy || [], config);
 if (!parsed) {
@@ -610,6 +622,7 @@ if (!parsed) {
   // ❌ If all fail, show fallback picker
 if (!parsed || isNaN(parsed.getTime())) {
   botReply("❌ I couldn’t understand the time. Please pick manually:");
+  enableInput();
   // ...
   parsed = await showAvailableSlotsPicker(today, data.busy || [], config);
   if (!parsed) {
@@ -643,7 +656,9 @@ const startMinutes = startH * 60 + startM;
 const endMinutes = endH * 60 + endM;
 
 if (selectedMinutes < startMinutes || selectedMinutes > endMinutes) {
-  return botReply(`❌ That time is outside your availability for ${day}. Please try a different time.`);
+  botReply(❌ That time is outside your availability for ${day}. Please try a different time.);
+  enableInput();
+  return;
 }
 
   }
@@ -672,7 +687,7 @@ showMessage(purpose, true);
 
   // ✅ Show full summary and ask for final confirmation
   const duration = config.meetingDuration || 40;
-  botReply(`📅 Meeting at: ${parsed.toLocaleString()} (${timezone})\n📝 Purpose: ${purpose}\n⏱️ Duration: ${duration} minutes`);
+  botReply(📅 Meeting at: ${parsed.toLocaleString()} (${timezone})\n📝 Purpose: ${purpose}\n⏱️ Duration: ${duration} minutes);
   botReply("Confirm this booking? (yes / no)");
 const confirm = await waitForUserInput();
 if (userCancelled(confirm) || !/^y(es)?$/i.test(confirm)) {
@@ -713,7 +728,7 @@ console.log("Booking payload:", {
   showMessage("Booking your appointment…", false, true);
 replySound?.play();
   try {
-    const res = await fetchWithTimeout(`${API_BASE}/book`, {
+    const res = await fetchWithTimeout(${API_BASE}/book, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -764,7 +779,7 @@ if (userCancelled(response)) {
     // Show time picker logic here
     const today = new Date();
     const iso = today.toISOString().split("T")[0];
-    const res2 = await fetchWithTimeout(`${API_BASE}/availability/${getClientID()}?date=${iso}`);
+    const res2 = await fetchWithTimeout(${API_BASE}/availability/${getClientID()}?date=${iso});
     const data2 = await res2.json();
 const picked = await showAvailableSlotsPicker(today, data2.busy || [], config);
 if (!picked) {
@@ -812,8 +827,8 @@ await sendMessage(feedback);
   // 🧠 Check for suggested time (e.g. backend gives next available)
   if (err && typeof err === "object" && err.suggested) {
     const suggestedDate = new Date(err.suggested);
-    botReply(`⚠️ ${msg}`, false, false, "", true);
-    botReply(`📅 Next available time: ${suggestedDate.toLocaleString()} — Want to book this instead? (yes / no)`);
+    botReply(⚠️ ${msg}, false, false, "", true);
+    botReply(📅 Next available time: ${suggestedDate.toLocaleString()} — Want to book this instead? (yes / no));
     const retry = await waitForUserInput();
     userInput.value = "";
     showMessage(retry, true);
@@ -844,6 +859,7 @@ await sendMessage(feedback);
       }
     } else {
       botReply("Okay, you can pick another time.");
+  enableInput();
       // Continue to available time picker below
     }
   }
@@ -853,17 +869,19 @@ await sendMessage(feedback);
     const days = Object.keys(availability);
     const windows = days.map(day => {
       const [start, end] = availability[day];
-      return `${day.charAt(0).toUpperCase() + day.slice(1)}: ${start} - ${end}`;
+      return ${day.charAt(0).toUpperCase() + day.slice(1)}: ${start} - ${end};
     }).join('<br>');
-    botReply(`⚠️ ${msg}<br><br>📆 <b>Available booking windows</b>:<br>${windows}<br><br>Let’s pick a valid time now:`);
+    botReply(⚠️ ${msg}<br><br>📆 <b>Available booking windows</b>:<br>${windows}<br><br>Let’s pick a valid time now:);
+  enableInput();
   } else {
-    botReply(`⚠️ ${msg}<br>Let’s pick a valid time now:`);
+    botReply(⚠️ ${msg}<br>Let’s pick a valid time now:);
+  enableInput();
   }
 
   // 🔥 Instantly show available times for today, let user pick
   const today = new Date();
   const iso = today.toISOString().split("T")[0];
-  const res2 = await fetchWithTimeout(`${API_BASE}/availability/${getClientID()}?date=${iso}`);
+  const res2 = await fetchWithTimeout(${API_BASE}/availability/${getClientID()}?date=${iso});
   const data2 = await res2.json();
   const picked = await showAvailableSlotsPicker(today, data2.busy || [], config);
   if (!picked) return botReply("❌ Booking cancelled.");
@@ -888,9 +906,10 @@ await sendMessage(feedback);
 
   // SUCCESS: Got confirmation link
   const { confirmation_link } = await res.json();
-  chatLog += `Booked ${datetime}: ${confirmation_link}\n`;
-  botReply(`✅ Your appointment is booked for ${parsed.toLocaleString()}!\n${linkify(confirmation_link)}`);
+  chatLog += Booked ${datetime}: ${confirmation_link}\n;
+  botReply(✅ Your appointment is booked for ${parsed.toLocaleString()}!\n${linkify(confirmation_link)});
   botReply("Anything else I can help you with?");
+  enableInput();
   insertQuickOptions();
 insertRatingWidget();
 
@@ -911,7 +930,7 @@ async function bookSlot({ datetime, purpose }) {
   const duration = config.meetingDuration || 40;
 
   // Confirm booking
-  botReply(`📅 Suggested: ${parsed.toLocaleString()} (${timezone})\n📝 Purpose: ${purpose}\n⏱️ Duration: ${duration} minutes`);
+  botReply(📅 Suggested: ${parsed.toLocaleString()} (${timezone})\n📝 Purpose: ${purpose}\n⏱️ Duration: ${duration} minutes);
   botReply("Book this time? (yes / no)");
 const confirm = await waitForUserInput();
 if (userCancelled(confirm) || !/^y(es)?$/i.test(confirm)) {
@@ -938,7 +957,7 @@ showMessage(confirm, true);
   showMessage("Booking your appointment…", false, true);
 replySound?.play();
   try {
-    const res = await fetchWithTimeout(`${API_BASE}/book`, {
+    const res = await fetchWithTimeout(${API_BASE}/book, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -963,14 +982,17 @@ if (!res.ok) {
   } catch (e) {
     msg = await res.text() || "Unknown error";
   }
-  return botReply(`⚠️ ${msg}`);
+  botReply(⚠️ ${msg});
+  enableInput();
+  return;
 }
 
 
     const { confirmation_link } = await res.json();
-    chatLog += `Booked ${datetime}: ${confirmation_link}\n`;
-    botReply(`✅ Your appointment is booked for ${parsed.toLocaleString()}!\n${linkify(confirmation_link)}`);
+    chatLog += Booked ${datetime}: ${confirmation_link}\n;
+    botReply(✅ Your appointment is booked for ${parsed.toLocaleString()}!\n${linkify(confirmation_link)});
     botReply("Anything else I can help you with?");
+  enableInput();
     insertQuickOptions();
 insertRatingWidget();
 } catch (error) {
@@ -1010,7 +1032,7 @@ if (!leadSubmitted) {
     collecting = "email";
     userInput.disabled = false;
     sendBtn.disabled = false;
-    return botReply(`${getPersonalizedGreeting()} ${config.askEmail || "Now, what’s your email?"}`);
+    return botReply(${getPersonalizedGreeting()} ${config.askEmail || "Now, what’s your email?"});
   } else if (collecting === "email") {
     userEmail = txt.slice(0, 100);
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userEmail)) {
@@ -1023,7 +1045,7 @@ if (!leadSubmitted) {
     collecting = "done";
     userInput.disabled = false;
     sendBtn.disabled = false;
-    botReply(`✅ Thanks, ${userName}! I’m ${chatbotName}. How can I help?`);
+    botReply(✅ Thanks, ${userName}! I’m ${chatbotName}. How can I help?);
     return insertQuickOptions();
   }
 }
@@ -1067,51 +1089,62 @@ function stripTags(str) {
 }
 
 
-    async function sendMessage(txt) {
-const id = `msg-${Date.now()}`;
-showMessage("<em>Loading...</em>", false, true, id); // 🟢 Shows "Loading..." with typing effect
-chatLog += `You: ${txt}\n`;
+async function sendMessage(txt,retries = 3, delay = 1000) {
+  const id = `msg-${Date.now()}`;
+  showMessage("<em>Loading...</em>", false, true, id); // Shows "Loading..." with typing effect
+  chatLog += `You: ${txt}\n`;
 
-      if (!token) {
-        const errEl = getEl(id);
-        if (errEl) errEl.innerText = "❌ Missing token";
-        return;
-      }
+  if (!token) {
+    const errEl = getEl(id);
+    if (errEl) errEl.innerText = "❌ Missing token";
+    return;
+  }
 
-      try {
-        const res = await fetchWithTimeout(`${API_BASE}/chat`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-  question: txt,
-  token,
-  client_id,
-  history: conversationHistory,    // <-- Already in your memory implementation
-  booking: bookingState           // <-- NEW: Send booking state!
-})
-        });
-        const wrapper = getEl(`${id}-wrapper`);
-        if (wrapper) wrapper.remove();
-        if (!res.ok) return botReply("⚠️ Server error. Please try again.", false);
-        const data = await res.json();
-const safeAnswer =
-  typeof data.answer === "string"
-    ? linkify(stripTags(data.answer))
-    : (data.answer ? JSON.stringify(data.answer, null, 2) : "No response from bot.");
-showMessage(`${chatbotName}: ${safeAnswer}`, false);
-updateConversationHistory(txt, safeAnswer); // log conversation
-replySound?.play();
-chatLog += `${chatbotName}: ${safeAnswer}\n`;
-
-      } catch (e) {
-        const errEl = getEl(id);
-        if (errEl) errEl.innerText = "⚠️ Something went wrong";
-        console.error("[sendMessage] Error:", e);
-  userInput.disabled = false;
-  sendBtn.disabled = false;
-      }
-
+  try {
+    const res = await fetchWithTimeout(`${API_BASE}/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        question: txt,
+        token,
+        client_id,
+        history: conversationHistory,
+        booking: bookingState
+      })
+    });
+    const wrapper = getEl(`${id}-wrapper`);
+    if (wrapper) wrapper.remove();
+    if (!res.ok) {
+      botReply("⚠️ Server error. Please try again.", false);
+      enableInput();
+      return;
     }
+    let data = {};
+    try {
+      data = await res.json();
+    } catch (err) {
+      botReply("⚠️ Server error. Bad JSON from backend.", false);
+      enableInput();
+      return;
+    }
+    const safeAnswer =
+      typeof data.answer === "string"
+        ? linkify(stripTags(data.answer))
+        : (data.answer ? JSON.stringify(data.answer, null, 2) : "No response from bot.");
+    showMessage(`${chatbotName}: ${safeAnswer}`, false);
+    updateConversationHistory(txt, safeAnswer);
+    replySound?.play();
+    chatLog += `${chatbotName}: ${safeAnswer}\n`;
+
+  } catch (e) {
+    const errEl = getEl(id);
+    if (errEl) errEl.innerText = "⚠️ Something went wrong";
+    console.error("[sendMessage] Error:", e);
+    userInput.disabled = false;
+    sendBtn.disabled = false;
+  }
+}
+
 
     window.quickAsk = txt => {
       getEl("quickOpts")?.remove();
@@ -1132,7 +1165,7 @@ hideBadge();        // Hide badge
       if (!open) {
         bubbleSound?.play();
         if (!leadSubmitted) botReply(getPersonalizedGreeting() + " " + (config.greetingIntro || "What’s your name?"));
-
+  enableInput();
       }
     };
 
@@ -1142,7 +1175,7 @@ hideBadge();        // Hide badge
 
     window.addEventListener("beforeunload", () => {
       if (leadSubmitted && chatLog.trim()) {
-        fetch(`${API_BASE}/summary`, {
+        fetch(${API_BASE}/summary, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ name: userName, email: userEmail, chat_log: chatLog, token, client_id })
