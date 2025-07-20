@@ -37,15 +37,24 @@
     };
   }
 
-  function getErrorMsg(err) {
-    if (!err) return "Unknown error";
-    if (typeof err === "string") return err;
-    if (err.error && typeof err.error === "string") return err.error;
-    if (err.message && typeof err.message === "string") return err.message;
-    if (err.detail && typeof err.detail === "string") return err.detail;
-    if (err.error && typeof err.error === "object") return getErrorMsg(err.error);
-    return JSON.stringify(err);
+function getErrorMsg(err) {
+  if (!err) return "Unknown error";
+  // Dig deeper for nested error objects
+  if (typeof err === "string") return err;
+  if (typeof err === "object") {
+    if (err.detail && typeof err.detail === "object" && err.detail.error)
+      return err.detail.error;
+    if (err.detail && typeof err.detail === "string")
+      return err.detail;
+    if (err.error && typeof err.error === "string")
+      return err.error;
+    if (err.message && typeof err.message === "string")
+      return err.message;
+    if (err.error && typeof err.error === "object")
+      return getErrorMsg(err.error);
   }
+  return JSON.stringify(err);
+}
 
   function enableInput() {
     userInput.disabled = false;
@@ -67,6 +76,7 @@
       "forget it",
       "don’t want",
       "book later",
+      "i will book later",
       "maybe another time",
       "some other time",
       "not booking",
@@ -385,6 +395,17 @@ async function showDateTimePicker() {
     chatBox.scrollTop = chatBox.scrollHeight;
 
     const dateInput = wrapper.querySelector("#manualDate");
+// Disable days not in availableHours
+dateInput.addEventListener('input', function() {
+  const d = new Date(this.value);
+  const dayName = d.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
+  if (!config.availableHours?.[dayName]) {
+    this.setCustomValidity("No slots on this day.");
+    this.reportValidity();
+  } else {
+    this.setCustomValidity("");
+  }
+});
     const slotContainer = wrapper.querySelector("#slotButtons");
 
     async function fetchAndRenderSlots(dateStr) {
@@ -428,9 +449,16 @@ async function showAvailableSlotsPicker(date, busySlots, config) {
 
     // Generate slots in working hours
     const dayName = date.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
-    const [start, end] = (config.availableHours?.[dayName] || ["09:00", "17:00"]);
-    const startTime = new Date(date); startTime.setHours(...start.split(":").map(Number), 0, 0);
-    const endTime = new Date(date); endTime.setHours(...end.split(":").map(Number), 0, 0);
+const hours = config.availableHours?.[dayName];
+if (!hours) {
+  wrapper.innerHTML = `<p>😞 No available slots for ${dayName.charAt(0).toUpperCase() + dayName.slice(1)}.</p>`;
+  chatBox.appendChild(wrapper);
+  chatBox.scrollTop = chatBox.scrollHeight;
+  return;
+}
+const [start, end] = hours;
+const startTime = new Date(date); startTime.setHours(...start.split(":").map(Number), 0, 0);
+const endTime = new Date(date); endTime.setHours(...end.split(":").map(Number), 0, 0);
 
     const duration = config.meetingDuration || 40;
     const slots = [];
@@ -613,7 +641,7 @@ if (!parsed || isNaN(parsed.getTime())) {
     const startMinutes = startH * 60 + startM;
     const endMinutes = endH * 60 + endM;
 
-    if (selectedMinutes < startMinutes || selectedMinutes > endMinutes) {
+    if (selectedMinutes < startMinutes || selectedMinutes >= endMinutes) {
       botReply(`❌ That time is outside your availability for ${day}. Please try a different time.`);
       enableInput();
       return;
