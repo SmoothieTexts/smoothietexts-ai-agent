@@ -65,17 +65,19 @@ def fetch_config(client_id: str) -> dict:
         return {}
 
 def is_within_available_hours(dt: datetime.datetime, config: dict) -> bool:
-    day_name = dt.strftime("%A").lower()  # e.g., 'monday'
+    day_name = dt.strftime("%A").lower()
     available = config.get("availableHours", {}).get(day_name)
     if not available or len(available) != 2:
         return False
     start_str, end_str = available
-    dt_local = dt.time()
+    duration_minutes = int(config.get("meetingDuration", 40))
     start_parts = [int(p) for p in start_str.split(":")]
     end_parts = [int(p) for p in end_str.split(":")]
-    start_time = datetime.time(start_parts[0], start_parts[1])
-    end_time = datetime.time(end_parts[0], end_parts[1])
-    return start_time <= dt_local <= end_time
+    start_time = dt.replace(hour=start_parts[0], minute=start_parts[1], second=0, microsecond=0)
+    end_time = dt.replace(hour=end_parts[0], minute=end_parts[1], second=0, microsecond=0)
+    slot_start = dt
+    slot_end = dt + timedelta(minutes=duration_minutes)
+    return slot_start >= start_time and slot_end <= end_time
 
 def get_openai_client(client_id: str) -> OpenAI:
     key_env = f"OPENAI_API_KEY_{client_id.replace('-', '_').upper()}"
@@ -343,7 +345,7 @@ async def book(req: Request):
         dt = parser.isoparse(dt_str).astimezone(datetime.timezone.utc)
 
     if not is_within_available_hours(dt, cfg):
-        raise HTTPException(409, {"error": "The selected time is outside available hours. Please choose a valid time."})
+        raise HTTPException(409, {"error": f"That time is not available. Please pick a slot within working hours for {day_name.title()}."})
 
     duration_minutes = int(cfg.get("meetingDuration", 40))
     window_end = (dt + timedelta(minutes=duration_minutes)).isoformat()

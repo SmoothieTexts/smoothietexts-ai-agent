@@ -395,18 +395,38 @@ async function showDateTimePicker() {
     chatBox.scrollTop = chatBox.scrollHeight;
 
     const dateInput = wrapper.querySelector("#manualDate");
-// Disable days not in availableHours
-dateInput.addEventListener('input', function() {
-  const d = new Date(this.value);
-  const dayName = d.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
-  if (!config.availableHours?.[dayName]) {
-    this.setCustomValidity("No slots on this day.");
-    this.reportValidity();
-  } else {
-    this.setCustomValidity("");
-  }
-});
     const slotContainer = wrapper.querySelector("#slotButtons");
+
+    // ---- NEW: Disable unavailable weekdays ----
+    // Only allow dates with day names in config.availableHours
+    const allowedDays = Object.keys(config.availableHours || {});
+    // Calculate min/max
+    const today = new Date();
+    let minDate = today;
+    let maxDate = new Date();
+    maxDate.setDate(today.getDate() + 60); // 60 days out
+
+    // Helper to format date as YYYY-MM-DD
+    const fmt = d => d.toISOString().split("T")[0];
+    dateInput.min = fmt(minDate);
+    dateInput.max = fmt(maxDate);
+
+    // Disable invalid days (uses input's oninput event)
+    dateInput.addEventListener("input", function() {
+      const d = new Date(this.value);
+      const dayName = d.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
+      if (!allowedDays.includes(dayName)) {
+        this.setCustomValidity("No slots available on this day.");
+        this.value = ""; // Clear the field so user can't proceed
+        slotContainer.innerHTML = `<span>❌ No available time slots on this date.</span>`;
+        this.reportValidity();
+      } else {
+        this.setCustomValidity("");
+        slotContainer.innerHTML = "";
+        // Only fetch slots if valid
+        fetchAndRenderSlots(this.value);
+      }
+    });
 
     async function fetchAndRenderSlots(dateStr) {
       slotContainer.innerHTML = `<span>Loading available times…</span>`;
@@ -435,10 +455,17 @@ dateInput.addEventListener('input', function() {
       }
     }
 
-    dateInput.onchange = e => {
-      const selected = e.target.value;
-      if (selected) fetchAndRenderSlots(selected);
-    };
+    // (Optional) Prefill the picker with the first valid day
+    let probe = new Date(today);
+    for (let i = 0; i < 60; i++) {
+      const dayName = probe.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
+      if (allowedDays.includes(dayName)) {
+        dateInput.value = fmt(probe);
+        fetchAndRenderSlots(fmt(probe));
+        break;
+      }
+      probe.setDate(probe.getDate() + 1);
+    }
   });
 }
 
@@ -635,13 +662,20 @@ if (!parsed || isNaN(parsed.getTime())) {
   const hours = availability?.[day];
   if (hours) {
     const [startHour, endHour] = hours;
-    const selectedMinutes = parsed.getHours() * 60 + parsed.getMinutes();
     const [startH, startM] = startHour.split(':').map(Number);
     const [endH, endM] = endHour.split(':').map(Number);
-    const startMinutes = startH * 60 + startM;
-    const endMinutes = endH * 60 + endM;
+    const duration = config.meetingDuration || 40;
 
-    if (selectedMinutes < startMinutes || selectedMinutes >= endMinutes) {
+    // Create Date objects for slot start and end (in local time)
+    const slotStart = new Date(parsed); // when the meeting starts
+    const slotEnd = new Date(parsed.getTime() + duration * 60 * 1000);
+
+    const availStart = new Date(parsed);
+    availStart.setHours(startH, startM, 0, 0);
+    const availEnd = new Date(parsed);
+    availEnd.setHours(endH, endM, 0, 0);
+
+    if (slotStart < availStart || slotEnd > availEnd) {
       botReply(`❌ That time is outside your availability for ${day}. Please try a different time.`);
       enableInput();
       return;
