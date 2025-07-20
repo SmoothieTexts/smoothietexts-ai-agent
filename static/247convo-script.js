@@ -47,6 +47,11 @@
     return JSON.stringify(err);
   }
 
+function enableInput() {
+  userInput.disabled = false;
+  sendBtn.disabled = false;
+}
+
 function userCancelled(txt) {
   const cancelPhrases = [
     "cancel",
@@ -205,6 +210,7 @@ function insertRatingWidget() {
       } catch (err) {
         console.error("[insertRatingWidget] Rating error:", err);
         botReply(`${config.ratingError || "⚠️ Couldn't send your rating."}`);
+	enableInput();
       }
     };
   });
@@ -526,7 +532,9 @@ async function showAvailableSlotsPicker(date, busySlots, config) {
 
 async function startBookingFlow() {
   if (!leadSubmitted) {
-    return botReply("Before booking, may I have your name and email?");
+    botReply("Before booking, may I have your name and email?");
+    enableInput();
+    return;
   }
 
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -541,10 +549,12 @@ async function startBookingFlow() {
     botReply(
       `📆 <b>Available booking windows</b>:<br>${windows}<br><br>What date and time would you like? <br><i>(e.g., 2025-08-01 4 PM or 'next Friday at noon')</i>`
     );
+	enableInput();
   } else {
     botReply(
       "What date and time would you like? <br><i>(e.g., 2025-08-01 4 PM or 'next Friday at noon')</i>"
     );
+	enableInput();
   }
 
 const rawInput = await waitForUserInput();
@@ -578,12 +588,14 @@ showMessage(rawInput, true);
   if (!parsed || isNaN(parsed.getTime())) {
     if (typeof chrono === "undefined" || typeof chrono.parseDate !== "function") {
       botReply("⚠️ Internal error: time parser not available.");
+	enableInput();
       return;
     }
 
     parsed = chrono.parseDate(rawInput);
     if (!parsed || isNaN(parsed.getTime())) {
 botReply("❌ I couldn’t understand the time. Please pick manually:");
+enableInput();
 const today = new Date();
 const iso = today.toISOString().split("T")[0];
 const res = await fetchWithTimeout(`${API_BASE}/availability/${getClientID()}?date=${iso}`);
@@ -610,6 +622,7 @@ if (!parsed) {
   // ❌ If all fail, show fallback picker
 if (!parsed || isNaN(parsed.getTime())) {
   botReply("❌ I couldn’t understand the time. Please pick manually:");
+  enableInput();
   // ...
   parsed = await showAvailableSlotsPicker(today, data.busy || [], config);
   if (!parsed) {
@@ -643,7 +656,9 @@ const startMinutes = startH * 60 + startM;
 const endMinutes = endH * 60 + endM;
 
 if (selectedMinutes < startMinutes || selectedMinutes > endMinutes) {
-  return botReply(`❌ That time is outside your availability for ${day}. Please try a different time.`);
+  botReply(`❌ That time is outside your availability for ${day}. Please try a different time.`);
+  enableInput();
+  return;
 }
 
   }
@@ -844,6 +859,7 @@ await sendMessage(feedback);
       }
     } else {
       botReply("Okay, you can pick another time.");
+  enableInput();
       // Continue to available time picker below
     }
   }
@@ -856,8 +872,10 @@ await sendMessage(feedback);
       return `${day.charAt(0).toUpperCase() + day.slice(1)}: ${start} - ${end}`;
     }).join('<br>');
     botReply(`⚠️ ${msg}<br><br>📆 <b>Available booking windows</b>:<br>${windows}<br><br>Let’s pick a valid time now:`);
+  enableInput();
   } else {
     botReply(`⚠️ ${msg}<br>Let’s pick a valid time now:`);
+  enableInput();
   }
 
   // 🔥 Instantly show available times for today, let user pick
@@ -891,6 +909,7 @@ await sendMessage(feedback);
   chatLog += `Booked ${datetime}: ${confirmation_link}\n`;
   botReply(`✅ Your appointment is booked for ${parsed.toLocaleString()}!\n${linkify(confirmation_link)}`);
   botReply("Anything else I can help you with?");
+  enableInput();
   insertQuickOptions();
 insertRatingWidget();
 
@@ -963,7 +982,9 @@ if (!res.ok) {
   } catch (e) {
     msg = await res.text() || "Unknown error";
   }
-  return botReply(`⚠️ ${msg}`);
+  botReply(`⚠️ ${msg}`);
+  enableInput();
+  return;
 }
 
 
@@ -971,6 +992,7 @@ if (!res.ok) {
     chatLog += `Booked ${datetime}: ${confirmation_link}\n`;
     botReply(`✅ Your appointment is booked for ${parsed.toLocaleString()}!\n${linkify(confirmation_link)}`);
     botReply("Anything else I can help you with?");
+  enableInput();
     insertQuickOptions();
 insertRatingWidget();
 } catch (error) {
@@ -1092,7 +1114,9 @@ chatLog += `You: ${txt}\n`;
         });
         const wrapper = getEl(`${id}-wrapper`);
         if (wrapper) wrapper.remove();
-        if (!res.ok) return botReply("⚠️ Server error. Please try again.", false);
+        if (!res.ok) botReply("⚠️ Server error. Please try again.", false);
+  enableInput();
+  return;
         const data = await res.json();
 const safeAnswer =
   typeof data.answer === "string"
@@ -1132,7 +1156,7 @@ hideBadge();        // Hide badge
       if (!open) {
         bubbleSound?.play();
         if (!leadSubmitted) botReply(getPersonalizedGreeting() + " " + (config.greetingIntro || "What’s your name?"));
-
+  enableInput();
       }
     };
 
