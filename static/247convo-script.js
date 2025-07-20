@@ -679,6 +679,8 @@ if (userCancelled(confirm) || !/^y(es)?$/i.test(confirm)) {
     resetBookingState();
     userInput.value = "";
     await sendMessage("Booking cancelled.");
+  userInput.disabled = false;
+  sendBtn.disabled = false;
     const feedback = await waitForUserInput();
     if (userCancelled(feedback)) {
       userInput.value = "";
@@ -996,29 +998,36 @@ userInput.value = "";
     await sendMessage("Booking cancelled."); // sync to backend/context
     botReply("Booking process reset. What else can I help you with?");
     insertQuickOptions();
+userInput.disabled = false;
+sendBtn.disabled = false;
     return;
   }
   // ⬆️ END OF BLOCK
 
-      if (!leadSubmitted) {
-if (collecting === "name") {
-  userName = txt.slice(0, 100);   // <-- ADDED: Limit name to 100 chars
-  collecting = "email";
-  return botReply(`${getPersonalizedGreeting()} ${config.askEmail || "Now, what’s your email?"}`);
-} else if (collecting === "email") {
-  userEmail = txt.slice(0, 100);  // <-- ADDED: Limit email to 100 chars
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userEmail)) {
-    botReply("❌ Please enter a valid email address.", false, false, "", true);
+if (!leadSubmitted) {
+  if (collecting === "name") {
+    userName = txt.slice(0, 100);
+    collecting = "email";
     userInput.disabled = false;
     sendBtn.disabled = false;
-    return;
+    return botReply(`${getPersonalizedGreeting()} ${config.askEmail || "Now, what’s your email?"}`);
+  } else if (collecting === "email") {
+    userEmail = txt.slice(0, 100);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userEmail)) {
+      botReply("❌ Please enter a valid email address.", false, false, "", true);
+      userInput.disabled = false;
+      sendBtn.disabled = false;
+      return;
+    }
+    leadSubmitted = true;
+    collecting = "done";
+    userInput.disabled = false;
+    sendBtn.disabled = false;
+    botReply(`✅ Thanks, ${userName}! I’m ${chatbotName}. How can I help?`);
+    return insertQuickOptions();
   }
-  leadSubmitted = true;
-  collecting = "done";
-  botReply(`✅ Thanks, ${userName}! I’m ${chatbotName}. How can I help?`);
-  return insertQuickOptions();
 }
-      }
+
 
 if (leadSubmitted) {
   // Only trigger booking if user shows booking intent!
@@ -1034,6 +1043,8 @@ if (leadSubmitted) {
   if (/human|agent|real person|support|help/i.test(txt)) {
     botReply(config.handoff?.intro || "Connecting you to a human agent...", false);
     if (config.handoff?.whatsapp) showMessage(config.handoff.whatsapp, false);
+userInput.disabled = false;
+sendBtn.disabled = false;
     return;
   }
 
