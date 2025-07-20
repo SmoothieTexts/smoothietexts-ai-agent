@@ -7,6 +7,14 @@
   const BASE_CONFIG_URL  = "https://two47ctest.onrender.com/static";
   const API_BASE         = "https://two47cbackend.onrender.com";
 
+// ⬇️⬇️⬇️ Add the helper RIGHT HERE ⬇️⬇️⬇️
+function apiUrl(path, params = {}) {
+  const qp = Object.entries({ ...params, token }).map(
+    ([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`
+  ).join('&');
+  return `${API_BASE}${path}${qp ? '?' + qp : ''}`;
+}
+
   function linkify(text) {
     return text.replace(/(https?:\/\/[^\s]+)/g, url => `<a href="${url}" target="_blank" rel="noopener">${url}</a>`);
   }
@@ -367,20 +375,20 @@ function getErrorMsg(err) {
     }
 
 async function fetchBusyTimes(dateStr) {
-  const res = await fetchWithTimeout(`${API_BASE}/availability/${getClientID()}?date=${dateStr}`);
+  const res = await fetchWithTimeout(apiUrl(`/availability/${getClientID()}`, { date: dateStr }));
   if (!res.ok) return null;
   const data = await res.json();
   return data.busy || [];
 }
 
+
 async function getAvailableSlots(dateStr) {
-  const res = await fetchWithTimeout(`${API_BASE}/availability/${client_id}?date=${dateStr}&token=${token}`, {
-    headers: { "Authorization": `Bearer ${token}` }
-  });
+  const res = await fetchWithTimeout(apiUrl(`/availability/${client_id}`, { date: dateStr }));
   if (!res.ok) return [];
   const data = await res.json();
-  return data.available || [];
+  return data.slots || []; // Always use 'slots' key, never 'available'
 }
+
 
 async function showDateTimePicker() {
   return new Promise(async resolve => {
@@ -431,7 +439,7 @@ async function showDateTimePicker() {
     async function fetchAndRenderSlots(dateStr) {
       slotContainer.innerHTML = `<span>Loading available times…</span>`;
       try {
-        const res = await fetchWithTimeout(`${API_BASE}/availability/${client_id}?date=${dateStr}&token=${token}`);
+        const res = await fetchWithTimeout(apiUrl(`/availability/${client_id}`, { date: dateStr }));
         const data = await res.json();
 
         if (!data.slots || data.slots.length === 0) {
@@ -533,7 +541,7 @@ const endTime = new Date(date); endTime.setHours(...end.split(":").map(Number), 
       picker.onchange = async () => {
         const pickedDate = new Date(picker.value);
         const iso = pickedDate.toISOString().split("T")[0];
-        const res = await fetchWithTimeout(`${API_BASE}/availability/${getClientID()}?date=${iso}`);
+        const res = await fetchWithTimeout(apiUrl(`/availability/${getClientID()}`, { date: iso }));
         const data = await res.json();
         const next = await showAvailableSlotsPicker(pickedDate, data.busy || [], config);
         resolve(next);
@@ -550,6 +558,7 @@ const endTime = new Date(date); endTime.setHours(...end.split(":").map(Number), 
 }
 
 async function startBookingFlow() {
+  bookingInProgress = true; // <--- ADD THIS
   if (!leadSubmitted) {
     botReply("Before booking, may I have your name and email?");
     enableInput();
@@ -612,7 +621,7 @@ async function startBookingFlow() {
       enableInput();
       const today = new Date();
       const iso = today.toISOString().split("T")[0];
-      const res = await fetchWithTimeout(`${API_BASE}/availability/${getClientID()}?date=${iso}`);
+      const res = await fetchWithTimeout(`${API_BASE}/availability/${getClientID()}?date=${iso}&token=${token}`);
       const data = await res.json();
       parsed = await showAvailableSlotsPicker(today, data.busy || [], config);
       if (!parsed) {
@@ -637,7 +646,7 @@ if (!parsed || isNaN(parsed.getTime())) {
   enableInput();
   const today = new Date();
   const iso = today.toISOString().split("T")[0];
-  const res = await fetchWithTimeout(`${API_BASE}/availability/${getClientID()}?date=${iso}`);
+  const res = await fetchWithTimeout(`${API_BASE}/availability/${getClientID()}?date=${iso}&token=${token}`);
   const data = await res.json();
   parsed = await showAvailableSlotsPicker(today, data.busy || [], config);
   if (!parsed) {
@@ -711,6 +720,7 @@ botReply("Confirm this booking? (yes / no)");
 const confirm = await waitForUserInput();
 if (userCancelled(confirm) || !/^y(es)?$/i.test(confirm)) {
   resetBookingState();
+  bookingInProgress = false; // <--- ADD THIS
   userInput.value = "";
   await sendMessage("Booking cancelled.");
   userInput.disabled = false;
@@ -793,7 +803,7 @@ try {
         // Show time picker logic here
         const today = new Date();
         const iso = today.toISOString().split("T")[0];
-        const res2 = await fetchWithTimeout(`${API_BASE}/availability/${getClientID()}?date=${iso}`);
+        const res2 = await fetchWithTimeout(apiUrl(`/availability/${getClientID()}`, { date: iso }));
         const data2 = await res2.json();
         const picked = await showAvailableSlotsPicker(today, data2.busy || [], config);
         if (!picked) {
@@ -892,7 +902,7 @@ try {
     // 🔥 Instantly show available times for today, let user pick
     const today = new Date();
     const iso = today.toISOString().split("T")[0];
-    const res2 = await fetchWithTimeout(`${API_BASE}/availability/${getClientID()}?date=${iso}`);
+    const res2 = await fetchWithTimeout(apiUrl(`/availability/${getClientID()}`, { date: iso }));
     const data2 = await res2.json();
     const picked = await showAvailableSlotsPicker(today, data2.busy || [], config);
     if (!picked) return botReply("❌ Booking cancelled.");
@@ -919,6 +929,7 @@ try {
   const { confirmation_link } = await res.json();
   chatLog += `Booked ${datetime}: ${confirmation_link}\n`;
   botReply(`✅ Your appointment is booked for ${parsed.toLocaleString()}!\n${linkify(confirmation_link)}`);
+  bookingInProgress = false; // <--- ADD THIS
   botReply("Anything else I can help you with?");
   enableInput();
   insertQuickOptions();
@@ -946,6 +957,7 @@ async function bookSlot({ datetime, purpose }) {
   const confirm = await waitForUserInput();
   if (userCancelled(confirm) || !/^y(es)?$/i.test(confirm)) {
     resetBookingState();
+    bookingInProgress = false; // <--- ADD THIS
     userInput.value = "";
     await sendMessage("Booking cancelled.");
     const feedback = await waitForUserInput();
@@ -1024,6 +1036,26 @@ async function handleInput() {
 
   showMessage(txt, true);
   userInput.value = "";
+
+  // <--- ADD THIS
+  if (bookingInProgress) {
+    if (/start over/i.test(txt)) {
+      bookingInProgress = false;
+      resetBookingState();
+      await sendMessage("Booking cancelled.");
+      botReply("Booking process reset. What else can I help you with?");
+      insertQuickOptions();
+      userInput.disabled = false;
+      sendBtn.disabled = false;
+      return;
+    }
+    if (/continue/i.test(txt)) {
+      return await startBookingFlow();
+    }
+    // For any other input, continue booking
+    return await startBookingFlow();
+  }
+  // <--- END ADDITION
 
   // ⬇️ Reset flow if user types "start over"
   if (/start over/i.test(txt)) {
