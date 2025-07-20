@@ -344,6 +344,9 @@ async def book(req: Request):
         print(f"[Timezone Parse Error] dt_str={dt_str} timezone={timezone} error={ex}")
         dt = parser.isoparse(dt_str).astimezone(datetime.timezone.utc)
 
+    # 🟢 ADD THIS LINE:
+    day_name = dt.strftime("%A").lower()
+
     if not is_within_available_hours(dt, cfg):
         raise HTTPException(409, {"error": f"That time is not available. Please pick a slot within working hours for {day_name.title()}."})
 
