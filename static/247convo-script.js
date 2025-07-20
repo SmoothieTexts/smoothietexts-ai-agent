@@ -105,6 +105,12 @@ function userCancelled(txt) {
     const userInput   = getEl("userInput");
     const sendBtn     = getEl("sendBtn");
     const chatBadge   = getEl("chat-badge");
+// 🚨 DOM Guard: Halt if essentials are missing
+if (!bubble || !tooltip || !chatBox || !userInput || !sendBtn) {
+  alert("247Convo Chatbot: Missing critical HTML elements! Please check your widget markup and IDs.");
+  return;
+}
+
 
 // --- UI EFFECTS FOR BUBBLE/TOOLTIP --- //
 
@@ -185,7 +191,7 @@ function insertRatingWidget() {
       const score = e.target.getAttribute("data-rate");
       div.innerHTML = `${config.ratingThanks || "Thank you for your feedback!"}`;
       try {
-        await fetch(`${API_BASE}/rating`, {
+        await fetchWithTimeout(`${API_BASE}/rating`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -197,6 +203,7 @@ function insertRatingWidget() {
           })
         });
       } catch (err) {
+        console.error("[insertRatingWidget] Rating error:", err);
         botReply(`${config.ratingError || "⚠️ Couldn't send your rating."}`);
       }
     };
@@ -323,17 +330,20 @@ function botReply(text, isError = false) {
   replySound?.play();
 }
 
-    function insertQuickOptions() {
-      if (!chatBox) return;
-      chatBox.insertAdjacentHTML("beforeend", `
-        <div class="quick-options" id="quickOpts">
-          <button onclick="quickAsk('${quickOption1}')">${quickOption1}</button>
-          <button onclick="quickAsk('${quickOption2}')">${quickOption2}</button>
-          <button onclick="quickAsk('${quickOption3}')">${quickOption3}</button>
-        </div>
-      `);
-      chatBox.scrollTop = chatBox.scrollHeight;
-    }
+function insertQuickOptions() {
+  if (!chatBox) return;
+  // 💡 Remove any existing quick options before adding new ones
+  getEl("quickOpts")?.remove();
+  chatBox.insertAdjacentHTML("beforeend", `
+    <div class="quick-options" id="quickOpts">
+      <button onclick="quickAsk('${quickOption1}')">${quickOption1}</button>
+      <button onclick="quickAsk('${quickOption2}')">${quickOption2}</button>
+      <button onclick="quickAsk('${quickOption3}')">${quickOption3}</button>
+    </div>
+  `);
+  chatBox.scrollTop = chatBox.scrollHeight;
+}
+
 
 function waitForUserInput() {
   return new Promise(resolve => {
@@ -358,8 +368,21 @@ function waitForUserInput() {
   });
 }
 
+
+// --- Fetch with timeout utility ---
+function fetchWithTimeout(resource, options = {}) {
+  const { timeout = 15000 } = options; // 15s default
+  return Promise.race([
+    fetch(resource, options),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Network timeout, please try again.")), timeout)
+    )
+  ]);
+}
+
+
 async function fetchBusyTimes(dateStr) {
-  const res = await fetch(`${API_BASE}/availability/${getClientID()}?date=${dateStr}`);
+  const res = await fetchWithTimeout(`${API_BASE}/availability/${getClientID()}?date=${dateStr}`);
   if (!res.ok) return null;
   const data = await res.json();
   return data.busy || [];
@@ -367,9 +390,9 @@ async function fetchBusyTimes(dateStr) {
 
 
 async function getAvailableSlots(dateStr) {
-  const res = await fetch(`${API_BASE}/availability/${client_id}?date=${dateStr}&token=${token}`, {
-    headers: { "Authorization": `Bearer ${token}` }
-  });
+const res = await fetchWithTimeout(`${API_BASE}/availability/${client_id}?date=${dateStr}&token=${token}`, {
+  headers: { "Authorization": `Bearer ${token}` }
+});
   if (!res.ok) return [];
   const data = await res.json();
   return data.available || [];
@@ -395,7 +418,7 @@ async function showDateTimePicker() {
       slotContainer.innerHTML = `<span>Loading available times…</span>`;
 
       try {
-        const res = await fetch(`${API_BASE}/availability/${client_id}?date=${dateStr}&token=${token}`);
+        const res = await fetchWithTimeout(`${API_BASE}/availability/${client_id}?date=${dateStr}&token=${token}`);
         const data = await res.json();
 
         if (!data.slots || data.slots.length === 0) {
@@ -484,7 +507,7 @@ async function showAvailableSlotsPicker(date, busySlots, config) {
       picker.onchange = async () => {
         const pickedDate = new Date(picker.value);
         const iso = pickedDate.toISOString().split("T")[0];
-        const res = await fetch(`${API_BASE}/availability/${getClientID()}?date=${iso}`);
+        const res = await fetchWithTimeout(`${API_BASE}/availability/${getClientID()}?date=${iso}`);
         const data = await res.json();
         const next = await showAvailableSlotsPicker(pickedDate, data.busy || [], config);
         resolve(next);
@@ -507,41 +530,45 @@ async function startBookingFlow() {
   }
 
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const availability = config.availableHours;
+  const availability = (config.availableHours && typeof config.availableHours === "object" && !Array.isArray(config.availableHours)) ? config.availableHours : null;
 
-  // 📅 Show available booking windows before asking
-if (availability) {
-  const days = Object.keys(availability);
-  const windows = days.map(day => {
-    const [start, end] = availability[day];
-    return `${day.charAt(0).toUpperCase() + day.slice(1)}: ${start} - ${end}`;
-  }).join('<br>');
-  botReply(
-    `📆 <b>Available booking windows</b>:<br>${windows}<br><br>What date and time would you like? <br><i>(e.g., 2025-08-01 4 PM or 'next Friday at noon')</i>`
-  );
-} else {
-  botReply(
-    "What date and time would you like? <br><i>(e.g., 2025-08-01 4 PM or 'next Friday at noon')</i>"
-  );
-}
+  if (availability) {
+    const days = Object.keys(availability);
+    const windows = days.map(day => {
+      const [start, end] = Array.isArray(availability[day]) ? availability[day] : ["09:00", "17:00"];
+      return `${day.charAt(0).toUpperCase() + day.slice(1)}: ${start} - ${end}`;
+    }).join('<br>');
+    botReply(
+      `📆 <b>Available booking windows</b>:<br>${windows}<br><br>What date and time would you like? <br><i>(e.g., 2025-08-01 4 PM or 'next Friday at noon')</i>`
+    );
+  } else {
+    botReply(
+      "What date and time would you like? <br><i>(e.g., 2025-08-01 4 PM or 'next Friday at noon')</i>"
+    );
+  }
+
 const rawInput = await waitForUserInput();
 showMessage(rawInput, true); // Always show user input first!
 if (userCancelled(rawInput)) {
     resetBookingState();
-  await sendMessage("Booking cancelled."); // <== ADD THIS LINE!
-const feedback = await waitForUserInput();
-if (userCancelled(feedback)) {
-  insertQuickOptions();
-  return;
-}
-// If not cancelled, treat as normal chat
-await sendMessage(feedback);
+    userInput.value = ""; // <-- Always clear the field
+    await sendMessage("Booking cancelled.");
+    const feedback = await waitForUserInput();
+    if (userCancelled(feedback)) {
+      userInput.value = ""; // <-- Clear again after feedback
+      insertQuickOptions();
+      return;
+    }
+    userInput.value = ""; // <-- Clear before echoing/processing feedback
+    showMessage(feedback, true);
+    await sendMessage(feedback);
 
-  insertQuickOptions();
-  return;
+    insertQuickOptions();
+    return;
 }
 userInput.value = "";
 showMessage(rawInput, true);
+
 
 
   // 🧠 First try native JavaScript parsing
@@ -559,17 +586,19 @@ showMessage(rawInput, true);
 botReply("❌ I couldn’t understand the time. Please pick manually:");
 const today = new Date();
 const iso = today.toISOString().split("T")[0];
-const res = await fetch(`${API_BASE}/availability/${getClientID()}?date=${iso}`);
+const res = await fetchWithTimeout(`${API_BASE}/availability/${getClientID()}?date=${iso}`);
 const data = await res.json();
 parsed = await showAvailableSlotsPicker(today, data.busy || [], config);
 if (!parsed) {
-const feedback = await waitForUserInput();
-if (userCancelled(feedback)) {
-  insertQuickOptions();
-  return;
-}
-// If not cancelled, treat as normal chat
-await sendMessage(feedback);
+  const feedback = await waitForUserInput();
+  if (userCancelled(feedback)) {
+    userInput.value = ""; // <-- ADD THIS
+    insertQuickOptions();
+    return;
+  }
+  userInput.value = ""; // <-- ADD THIS
+  showMessage(feedback, true); // Optional, for UX consistency
+  await sendMessage(feedback);
 
   insertQuickOptions();
   return;
@@ -579,27 +608,26 @@ await sendMessage(feedback);
   }
 
   // ❌ If all fail, show fallback picker
-  if (!parsed || isNaN(parsed.getTime())) {
-botReply("❌ I couldn’t understand the time. Please pick manually:");
-const today = new Date();
-const iso = today.toISOString().split("T")[0];
-const res = await fetch(`${API_BASE}/availability/${getClientID()}?date=${iso}`);
-const data = await res.json();
-parsed = await showAvailableSlotsPicker(today, data.busy || [], config);
-if (!parsed) {
-const feedback = await waitForUserInput();
-if (userCancelled(feedback)) {
-  insertQuickOptions();
-  return;
-}
-// If not cancelled, treat as normal chat
-await sendMessage(feedback);
+if (!parsed || isNaN(parsed.getTime())) {
+  botReply("❌ I couldn’t understand the time. Please pick manually:");
+  // ...
+  parsed = await showAvailableSlotsPicker(today, data.busy || [], config);
+  if (!parsed) {
+    const feedback = await waitForUserInput();
+    if (userCancelled(feedback)) {
+      userInput.value = ""; // <-- ADD THIS
+      insertQuickOptions();
+      return;
+    }
+    userInput.value = ""; // <-- ADD THIS
+    showMessage(feedback, true); // Optional for visibility
+    await sendMessage(feedback);
 
-  insertQuickOptions();
-  return;
-}
-
+    insertQuickOptions();
+    return;
   }
+}
+
 
   const datetime = parsed.toISOString();
 
@@ -649,20 +677,23 @@ showMessage(purpose, true);
 const confirm = await waitForUserInput();
 if (userCancelled(confirm) || !/^y(es)?$/i.test(confirm)) {
     resetBookingState();
-  await sendMessage("Booking cancelled."); // <== ADD THIS LINE!
-const feedback = await waitForUserInput();
-if (userCancelled(feedback)) {
-  insertQuickOptions();
-  return;
-}
-// If not cancelled, treat as normal chat
-await sendMessage(feedback);
-
-  insertQuickOptions();
-  return;
+    userInput.value = "";
+    await sendMessage("Booking cancelled.");
+    const feedback = await waitForUserInput();
+    if (userCancelled(feedback)) {
+      userInput.value = "";
+      insertQuickOptions();
+      return;
+    }
+    userInput.value = "";
+    showMessage(feedback, true);
+    await sendMessage(feedback);
+    insertQuickOptions();
+    return;
 }
 userInput.value = "";
 showMessage(confirm, true);
+
 
 
 console.log("Booking payload:", {
@@ -680,7 +711,7 @@ console.log("Booking payload:", {
   showMessage("Booking your appointment…", false, true);
 replySound?.play();
   try {
-    const res = await fetch(`${API_BASE}/book`, {
+    const res = await fetchWithTimeout(`${API_BASE}/book`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -711,39 +742,43 @@ if (!res.ok) {
 if (typeof msg === "string" && msg.toLowerCase().includes("outside available hours")) {
   botReply("The time you selected is outside our available hours. Would you like to pick another time? (yes/no)");
   const response = await waitForUserInput();
-  if (userCancelled(response)) {
-      resetBookingState();
-  await sendMessage("Booking cancelled."); // <== ADD THIS LINE!
-    // (Optional) Ask why user cancelled:
-const feedback = await waitForUserInput();
-if (userCancelled(feedback)) {
-  insertQuickOptions();
-  return;
-}
-// If not cancelled, treat as normal chat
-await sendMessage(feedback);
-
+if (userCancelled(response)) {
+  resetBookingState();
+  userInput.value = ""; // <-- ADD THIS
+  await sendMessage("Booking cancelled!");
+  const feedback = await waitForUserInput();
+  if (userCancelled(feedback)) {
+    userInput.value = ""; // <-- ADD THIS
     insertQuickOptions();
     return;
+  }
+  userInput.value = ""; // <-- ADD THIS
+  showMessage(feedback, true);
+  await sendMessage(feedback);
+
+  insertQuickOptions();
+  return;
   } else if (/^y(es)?$/i.test(response)) {
     // Show time picker logic here
     const today = new Date();
     const iso = today.toISOString().split("T")[0];
-    const res2 = await fetch(`${API_BASE}/availability/${getClientID()}?date=${iso}`);
+    const res2 = await fetchWithTimeout(`${API_BASE}/availability/${getClientID()}?date=${iso}`);
     const data2 = await res2.json();
-    const picked = await showAvailableSlotsPicker(today, data2.busy || [], config);
-    if (!picked) {
-const feedback = await waitForUserInput();
-if (userCancelled(feedback)) {
+const picked = await showAvailableSlotsPicker(today, data2.busy || [], config);
+if (!picked) {
+  const feedback = await waitForUserInput();
+  if (userCancelled(feedback)) {
+    userInput.value = ""; // <-- ADD THIS
+    insertQuickOptions();
+    return;
+  }
+  userInput.value = ""; // <-- ADD THIS
+  showMessage(feedback, true);
+  await sendMessage(feedback);
+
   insertQuickOptions();
   return;
 }
-// If not cancelled, treat as normal chat
-await sendMessage(feedback);
-
-      insertQuickOptions();
-      return;
-    }
     // You could continue booking with this picked time...
     // Consider asking for new purpose if needed, or continue your booking flow here.
     // For now, just continue your normal flow.
@@ -826,7 +861,7 @@ await sendMessage(feedback);
   // 🔥 Instantly show available times for today, let user pick
   const today = new Date();
   const iso = today.toISOString().split("T")[0];
-  const res2 = await fetch(`${API_BASE}/availability/${getClientID()}?date=${iso}`);
+  const res2 = await fetchWithTimeout(`${API_BASE}/availability/${getClientID()}?date=${iso}`);
   const data2 = await res2.json();
   const picked = await showAvailableSlotsPicker(today, data2.busy || [], config);
   if (!picked) return botReply("❌ Booking cancelled.");
@@ -858,7 +893,10 @@ await sendMessage(feedback);
 insertRatingWidget();
 
 } catch (error) {
+  console.error("[startBookingFlow] Booking error:", error);
   botReply("⚠️ Couldn’t complete booking. Please try again.", false, false, "", true);
+  userInput.disabled = false;
+  sendBtn.disabled = false;
 }
 // THIS BRACE BELOW is critical! It closes startBookingFlow
 } 
@@ -876,25 +914,29 @@ async function bookSlot({ datetime, purpose }) {
 const confirm = await waitForUserInput();
 if (userCancelled(confirm) || !/^y(es)?$/i.test(confirm)) {
     resetBookingState();
-  await sendMessage("Booking cancelled."); // <== ADD THIS LINE!
-const feedback = await waitForUserInput();
-if (userCancelled(feedback)) {
-  insertQuickOptions();
-  return;
-}
-// If not cancelled, treat as normal chat
-await sendMessage(feedback);
-
-  insertQuickOptions();
-  return;
+    userInput.value = "";
+    await sendMessage("Booking cancelled.");
+    const feedback = await waitForUserInput();
+    if (userCancelled(feedback)) {
+      userInput.value = "";
+      insertQuickOptions();
+      return;
+    }
+    userInput.value = "";
+    showMessage(feedback, true);
+    await sendMessage(feedback);
+    insertQuickOptions();
+    return;
 }
 userInput.value = "";
 showMessage(confirm, true);
 
+
+
   showMessage("Booking your appointment…", false, true);
 replySound?.play();
   try {
-    const res = await fetch(`${API_BASE}/book`, {
+    const res = await fetchWithTimeout(`${API_BASE}/book`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -930,16 +972,23 @@ if (!res.ok) {
     insertQuickOptions();
 insertRatingWidget();
 } catch (error) {
+  console.error("[bookSlot] Booking error:", error);
   botReply("⚠️ Couldn’t complete booking. Please try again.", false, false, "", true);
+  userInput.disabled = false;
+  sendBtn.disabled = false;
 }
 }
 
 
     async function handleInput() {
-      const txt = userInput.value.trim();
-      if (!txt) return;
-      showMessage(txt, true);
-      userInput.value = "";
+const txt = userInput.value.trim();
+if (!txt) return;
+// 🚦 Disable input/button to prevent double submit
+userInput.disabled = true;
+sendBtn.disabled = true;
+
+showMessage(txt, true);
+userInput.value = "";
 
   // ⬇️ ADD THIS BLOCK RIGHT HERE:
   if (/start over/i.test(txt)) {
@@ -952,22 +1001,23 @@ insertRatingWidget();
   // ⬆️ END OF BLOCK
 
       if (!leadSubmitted) {
-        if (collecting === "name") {
-          userName = txt;
-          collecting = "email";
-          return botReply(`${getPersonalizedGreeting()} ${config.askEmail || "Now, what’s your email?"}`);
-        } else if (collecting === "email") {
-          userEmail = txt;
-if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userEmail)) {
-  botReply("❌ Please enter a valid email address.", false, false, "", true);
-  return;
+if (collecting === "name") {
+  userName = txt.slice(0, 100);   // <-- ADDED: Limit name to 100 chars
+  collecting = "email";
+  return botReply(`${getPersonalizedGreeting()} ${config.askEmail || "Now, what’s your email?"}`);
+} else if (collecting === "email") {
+  userEmail = txt.slice(0, 100);  // <-- ADDED: Limit email to 100 chars
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userEmail)) {
+    botReply("❌ Please enter a valid email address.", false, false, "", true);
+    userInput.disabled = false;
+    sendBtn.disabled = false;
+    return;
+  }
+  leadSubmitted = true;
+  collecting = "done";
+  botReply(`✅ Thanks, ${userName}! I’m ${chatbotName}. How can I help?`);
+  return insertQuickOptions();
 }
-leadSubmitted = true;
-collecting = "done";
-botReply(`✅ Thanks, ${userName}! I’m ${chatbotName}. How can I help?`);
-return insertQuickOptions();
-
-        }
       }
 
 if (leadSubmitted) {
@@ -993,6 +1043,10 @@ if (leadSubmitted) {
 // All other input just goes to normal chat/AI
 await sendMessage(txt);
 
+  // 🚦 Re-enable input/button after handling
+  userInput.disabled = false;
+  sendBtn.disabled = false;
+
 } // <-- ADD THIS CLOSING BRACE
 
 function stripTags(str) {
@@ -1003,9 +1057,9 @@ function stripTags(str) {
 
 
     async function sendMessage(txt) {
-      const id = `msg-${Date.now()}`;
-      showMessage("", false, true, id);
-      chatLog += `You: ${txt}\n`;
+const id = `msg-${Date.now()}`;
+showMessage("<em>Loading...</em>", false, true, id); // 🟢 Shows "Loading..." with typing effect
+chatLog += `You: ${txt}\n`;
 
       if (!token) {
         const errEl = getEl(id);
@@ -1014,7 +1068,7 @@ function stripTags(str) {
       }
 
       try {
-        const res = await fetch(`${API_BASE}/chat`, {
+        const res = await fetchWithTimeout(`${API_BASE}/chat`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -1038,10 +1092,14 @@ updateConversationHistory(txt, safeAnswer); // log conversation
 replySound?.play();
 chatLog += `${chatbotName}: ${safeAnswer}\n`;
 
-      } catch {
+      } catch (e) {
         const errEl = getEl(id);
         if (errEl) errEl.innerText = "⚠️ Something went wrong";
+        console.error("[sendMessage] Error:", e);
+  userInput.disabled = false;
+  sendBtn.disabled = false;
       }
+
     }
 
     window.quickAsk = txt => {
@@ -1107,5 +1165,12 @@ if (document.readyState === "loading") {
 } else {
   waitForChronoThenRun();
 }
+
+window.addEventListener("error", function(e) {
+  console.error("[GLOBAL ERROR]", e.error || e.message || e);
+});
+window.addEventListener("unhandledrejection", function(e) {
+  console.error("[UNHANDLED PROMISE REJECTION]", e.reason);
+});
 
 })();

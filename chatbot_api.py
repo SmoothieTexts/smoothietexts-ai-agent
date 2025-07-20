@@ -103,8 +103,8 @@ def fetch_best_match(q, client_id, openai_client):
             sc = cosine(q_emb, emb)
             if sc > best_score:
                 best, best_score = r["content"], sc
-        except:
-            pass
+        except Exception as ex:
+            print(f"[KB Embedding Error] Row: {r.get('id', '[no id]')} Exception: {ex}")
     return best, best_score
 
 def is_greeting(t: str) -> bool:
@@ -319,15 +319,27 @@ async def book(req: Request):
     if not all([cid, name, email, dt_str]):
         raise HTTPException(400, {"error": "Missing booking parameters"})
 
+    # -- Sanity check on name/email --
+    if not isinstance(name, str) or not isinstance(email, str):
+        raise HTTPException(400, {"error": "Invalid name or email type"})
+    if len(name) > 100 or len(email) > 100:
+        raise HTTPException(400, {"error": "Name or email too long"})
+    import re
+    if not re.match(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$", email):
+        raise HTTPException(400, {"error": "Invalid email format"})
+
     cfg = fetch_config(cid)
     provider = p.get("bookingProvider") or cfg.get("bookingProvider")
+    if not provider:
+        raise HTTPException(400, {"error": "No booking provider configured."})
 
     try:
         import pytz
         dt = parser.isoparse(dt_str)
         tz = pytz.timezone(timezone)
         dt = dt.astimezone(tz)
-    except:
+    except Exception as ex:
+        print(f"[Timezone Parse Error] dt_str={dt_str} timezone={timezone} error={ex}")
         dt = parser.isoparse(dt_str).astimezone(datetime.timezone.utc)
 
     if not is_within_available_hours(dt, cfg):
@@ -408,6 +420,10 @@ async def book(req: Request):
         ).execute()
 
         link = created.get("conferenceData", {}).get("entryPoints", [{}])[0].get("uri", "")
+    if provider == "google" and not link:
+       # fallback to event.htmlLink if conference link is missing
+        link = created.get("htmlLink", "")
+
 
     elif provider == "acuity":
         prefix = cid.upper()
@@ -463,26 +479,38 @@ async def book(req: Request):
                     }
                 )
 
-        # 3️⃣ Book the appointment at the requested available time
-        res = requests.post(
-            "https://acuityscheduling.com/api/v1/appointments",
-            auth=(acuity_user, acuity_key),
-            json={
-                "firstName": name.split()[0],
-                "lastName": name.split()[-1],
-                "email": email,
-                "datetime": dt.isoformat(),
-                "appointmentTypeID": int(service_id),
-                "notes": purpose
-            }
-        )
-        if res.status_code >= 400:
-            raise HTTPException(
-                res.status_code,
-                {"error": f"Acuity error: {res.text}"}
-            )
-        link = res.json().get("confirmationPage")
+    # -- Fix: Robust name splitting --
+    name_parts = (name or "").strip().split()
+    firstName = name_parts[0] if len(name_parts) > 0 else ""
+    lastName = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
 
+    res = requests.post(
+        "https://acuityscheduling.com/api/v1/appointments",
+        auth=(acuity_user, acuity_key),
+        json={
+            "firstName": firstName,
+            "lastName": lastName,
+            "email": email,
+            "datetime": dt.isoformat(),
+            "appointmentTypeID": int(service_id),
+            "notes": purpose
+        }
+    )
+    if res.status_code >= 400:
+        raise HTTPException(
+            res.status_code,
+            {"error": f"Acuity error: {res.text}"}
+        )
+    link = res.json().get("confirmationPage")
+
+    # --- ADD THESE LINES BELOW ---
+    if provider not in ("google", "acuity"):
+        raise HTTPException(400, {"error": f"Unsupported booking provider: {provider}"})
+    if not link:
+        raise HTTPException(500, {"error": "Could not generate confirmation link."})
+    # --- END OF ADDED BLOCK ---
+
+    return {"confirmation_link": link}
 
 @app.get("/availability/{client_id}")
 def availability(client_id: str, date: str = Query(...), token: str = Query("")):
@@ -572,6 +600,8 @@ def availability(client_id: str, date: str = Query(...), token: str = Query(""))
 
 @app.get("/availability/{client_id}/busy")
 def availability_busy(client_id: str, date: str = Query(...)):
+    if token != API_TOKEN:
+        raise HTTPException(401, "Bad token")
     cfg = fetch_config(client_id)
     creds, cal_id = get_google_credentials_from_env(client_id)
     service = build("calendar", "v3", credentials=creds)
@@ -599,15 +629,18 @@ async def summary(req: Request):
     name, email, log, cid = p.get("name"), p.get("email"), p.get("chat_log"), p.get("client_id")
     if not all([name, email, log, cid]):
         raise HTTPException(400, {"error": "Missing fields"})
-    supabase.table(TABLE_LOG).insert({
-        "name": name,
-        "email": email,
-        "chat_log": log,
-        "client_id": cid,
-        "token": p["token"],
-        "timestamp": datetime.datetime.utcnow().isoformat()
-    }).execute()
-    return {"status": "saved"}
+    try:
+        supabase.table(TABLE_LOG).insert({
+            "name": name,
+            "email": email,
+            "chat_log": log,
+            "client_id": cid,
+            "timestamp": datetime.datetime.utcnow().isoformat()
+        }).execute()
+        return {"status": "saved"}
+    except Exception as ex:
+        print(f"[Supabase Log Insert Error] {ex}")
+        return JSONResponse({"error": "Could not save log"}, status_code=500)
 
 @app.post("/rating")
 async def rating(req: Request):
@@ -635,25 +668,47 @@ async def rating(req: Request):
 
 @app.get("/configs/{client_id}.json")
 async def get_config_file(client_id: str):
-    fp = os.path.join("configs", f"{client_id}.json")
+    from pathlib import Path
+
+    filename = f"{client_id}.json"
+    if "/" in filename or ".." in filename:
+        raise HTTPException(400, {"error": "Invalid file name"})
+    fp = os.path.join("configs", filename)
     if not os.path.exists(fp):
         raise HTTPException(404, {"error": "Not found"})
-    data = open(fp, "rb").read()
+    with open(fp, "rb") as f:
+        data = f.read()
     return Response(
         content=data,
         media_type="application/json",
         headers={"Access-Control-Allow-Origin": "*"}
     )
 
+
 @app.get("/static/{path:path}")
 async def static_file(path: str):
+    from pathlib import Path
+
+    if ".." in path or path.startswith("/"):
+        raise HTTPException(400, {"error": "Invalid file path"})
     fp = os.path.join("static", path)
     if not os.path.exists(fp):
         raise HTTPException(404, {"error": "Not found"})
-    data = open(fp, "rb").read()
+    with open(fp, "rb") as f:
+        data = f.read()
     mt = "text/html" if fp.endswith(".html") else "application/octet-stream"
     return Response(
         content=data,
         media_type=mt,
         headers={"Access-Control-Allow-Origin": "*"}
     )
+
+
+
+from fastapi.responses import PlainTextResponse
+
+@app.exception_handler(Exception)
+async def all_exception_handler(request, exc):
+    import traceback
+    print("[Global Exception Handler]", traceback.format_exc())
+    return PlainTextResponse("Internal server error", status_code=500)
