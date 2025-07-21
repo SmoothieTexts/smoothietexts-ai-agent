@@ -34,17 +34,6 @@ function apiUrl(path, params = {}, token = "") {
 
   const now = () => new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-  function parseBookingIntent(text) {
-    const bookingIntent = /\b(book|schedule|appointment|meeting)\b/i.test(text);
-    const dateMatch = text.match(/\b(?:\d{4}-\d{2}-\d{2}|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i);
-    const timeMatch = text.match(/\b(\d{1,2}(?::\d{2})?\s?(am|pm)?)\b/i);
-    return {
-      intent: bookingIntent ? "booking" : null,
-      date: dateMatch ? dateMatch[0] : null,
-      time: timeMatch ? timeMatch[0] : null
-    };
-  }
-
 function getErrorMsg(err) {
   if (!err) return "Unknown error";
   // Dig deeper for nested error objects
@@ -375,14 +364,6 @@ function getErrorMsg(err) {
       ]);
     }
 
-async function fetchBusyTimes(dateStr) {
-  const res = await fetchWithTimeout(apiUrl('/availability/' + getClientID(), { date: dateStr }, token));
-  if (!res.ok) return null;
-  const data = await res.json();
-  return data.busy || [];
-}
-
-
 async function getAvailableSlots(dateStr) {
   const res = await fetchWithTimeout(apiUrl('/availability/' + getClientID(), { date: dateStr }, token));
   if (!res.ok) return [];
@@ -391,86 +372,168 @@ async function getAvailableSlots(dateStr) {
 }
 
 
-async function showDateTimePicker() {
-  return new Promise(async resolve => {
+async function startBookingFlow() {
+  bookingInProgress = true;
+
+  if (!leadSubmitted) {
+    botReply("Before booking, may I have your name and email?");
+    enableInput();
+    return;
+  }
+
+  // Always get both business and user timezone
+  const businessTimezone = config.timezone || "UTC";
+  const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  botReply(
+    `All available times are shown in <b>your local timezone</b>: ${userTimezone}.<br>` +
+    `Business location timezone: <b>${businessTimezone}</b>.`
+  );
+
+  // STEP 1: User picks a date
+  const pickedDate = await showDatePicker(config);
+  if (!pickedDate) {
+    botReply("Booking cancelled.");
+    bookingInProgress = false;
+    return;
+  }
+
+  // STEP 2: Fetch available slots for that day from backend (all in UTC ISO)
+  const isoDate = pickedDate.toISOString().split("T")[0];
+  const slots = await getAvailableSlots(isoDate);
+  if (!slots.length) {
+    botReply("No available slots for that date. Please pick another day.");
+    bookingInProgress = false;
+    return startBookingFlow();
+  }
+
+  // STEP 3: Show slots, converted to user local time for display
+  const slotMap = slots.map(slotUTC => ({
+    utc: slotUTC,
+    userLocal: new Date(slotUTC).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: userTimezone }),
+    bizLocal: new Date(slotUTC).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: businessTimezone }),
+    raw: slotUTC
+  }));
+
+  botReply(`Available times for ${pickedDate.toDateString()}:`);
+  const pickedSlot = await showTimePicker(slotMap, userTimezone, businessTimezone);
+  if (!pickedSlot) {
+    botReply("Booking cancelled.");
+    bookingInProgress = false;
+    return;
+  }
+
+  // STEP 4: Confirm booking with both timezones shown
+  const slotUserTZ = new Date(pickedSlot.utc).toLocaleString(undefined, { timeZone: userTimezone });
+  const slotBizTZ = new Date(pickedSlot.utc).toLocaleString(undefined, { timeZone: businessTimezone });
+  botReply(
+    `Confirm booking:<br>
+    <b>${slotUserTZ} (your time: ${userTimezone})</b><br>
+    <b>${slotBizTZ} (business time: ${businessTimezone})</b><br>
+    Duration: ${config.meetingDuration || 40} min`
+  );
+  botReply("Proceed with this booking? (yes/no)");
+  const confirm = await waitForUserInput();
+  if (!/^y(es)?$/i.test(confirm)) {
+    botReply("Booking cancelled.");
+    bookingInProgress = false;
+    return;
+  }
+
+  // STEP 5: Ask for meeting purpose
+  botReply("What’s the purpose of this meeting?");
+  const purpose = await waitForUserInput();
+
+  // STEP 6: Send booking request to backend
+  showMessage("Booking your appointment…", false, true);
+
+  try {
+    const res = await fetchWithTimeout(`${API_BASE}/book`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        client_id: getClientID(),
+        token: config.token,
+        name: userName,
+        email: userEmail,
+        datetime: pickedSlot.utc, // Always UTC
+        timezone: userTimezone,
+        business_timezone: businessTimezone,
+        purpose,
+        bookingProvider: config.bookingProvider
+      })
+    });
+
+    if (!res.ok) {
+      botReply("Couldn’t book slot. Try again.");
+      bookingInProgress = false;
+      return;
+    }
+
+    const { confirmation_link } = await res.json();
+    botReply(`✅ Appointment booked!<br>
+      <a href="${confirmation_link}" target="_blank">View details</a><br>
+      You'll receive a confirmation email.`);
+    bookingInProgress = false;
+    insertQuickOptions();
+    insertRatingWidget();
+  } catch (error) {
+    botReply("⚠️ Couldn’t complete booking. Please try again.", true);
+    bookingInProgress = false;
+    userInput.disabled = false;
+    sendBtn.disabled = false;
+  }
+}
+
+
+async function showDatePicker(config) {
+  return new Promise(resolve => {
     const wrapper = document.createElement("div");
     wrapper.style.margin = "1em 0";
     wrapper.innerHTML = `
       <label>Select a date:</label><br/>
       <input type="date" id="manualDate" style="padding:5px;margin:5px 0;" />
       <div id="slotButtons" style="margin-top: 1em;"></div>
+      <div style="font-size:0.85em;color:#888;">(Only dates with availability will be selectable.)</div>
     `;
     chatBox.appendChild(wrapper);
     chatBox.scrollTop = chatBox.scrollHeight;
 
     const dateInput = wrapper.querySelector("#manualDate");
-    const slotContainer = wrapper.querySelector("#slotButtons");
 
-    // ---- NEW: Disable unavailable weekdays ----
-    // Only allow dates with day names in config.availableHours
+    // Only enable days with config.availableHours (backend ensures busy days are blocked)
     const allowedDays = Object.keys(config.availableHours || {});
-    // Calculate min/max
     const today = new Date();
     let minDate = today;
     let maxDate = new Date();
-    maxDate.setDate(today.getDate() + 60); // 60 days out
+    maxDate.setDate(today.getDate() + 60);
 
     // Helper to format date as YYYY-MM-DD
     const fmt = d => d.toISOString().split("T")[0];
     dateInput.min = fmt(minDate);
     dateInput.max = fmt(maxDate);
 
-    // Disable invalid days (uses input's oninput event)
+    // Disable unavailable days
     dateInput.addEventListener("input", function() {
       const d = new Date(this.value);
       const dayName = d.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
       if (!allowedDays.includes(dayName)) {
         this.setCustomValidity("No slots available on this day.");
-        this.value = ""; // Clear the field so user can't proceed
-        slotContainer.innerHTML = `<span>❌ No available time slots on this date.</span>`;
+        this.value = "";
         this.reportValidity();
       } else {
         this.setCustomValidity("");
-        slotContainer.innerHTML = "";
-        // Only fetch slots if valid
-        fetchAndRenderSlots(this.value);
+        resolve(d);
+        wrapper.remove();
       }
     });
 
-    async function fetchAndRenderSlots(dateStr) {
-      slotContainer.innerHTML = `<span>Loading available times…</span>`;
-      try {
-        const res = await fetchWithTimeout(apiUrl('/availability/' + getClientID(), { date: dateStr }, token));
-        const data = await res.json();
-
-        if (!data.slots || data.slots.length === 0) {
-          slotContainer.innerHTML = `<span>❌ No available time slots on this date.</span>`;
-          return;
-        }
-
-        slotContainer.innerHTML = `<p>Pick a time:</p>`;
-        data.slots.forEach(slot => {
-          const btn = document.createElement("button");
-          btn.textContent = new Date(slot).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-          btn.style = "padding:6px 12px;margin:4px;border-radius:6px;";
-          btn.onclick = () => {
-            wrapper.remove();
-            resolve(new Date(slot));
-          };
-          slotContainer.appendChild(btn);
-        });
-      } catch (err) {
-        slotContainer.innerHTML = `<span>⚠️ Couldn’t load availability.</span>`;
-      }
-    }
-
-    // (Optional) Prefill the picker with the first valid day
+    // Prefill the picker with the first valid day
     let probe = new Date(today);
     for (let i = 0; i < 60; i++) {
       const dayName = probe.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
       if (allowedDays.includes(dayName)) {
         dateInput.value = fmt(probe);
-        fetchAndRenderSlots(fmt(probe));
         break;
       }
       probe.setDate(probe.getDate() + 1);
@@ -478,555 +541,36 @@ async function showDateTimePicker() {
   });
 }
 
-async function showAvailableSlotsPicker(date, busySlots, config) {
+
+async function showTimePicker(slotMap, userTimezone, businessTimezone) {
   return new Promise(resolve => {
     const wrapper = document.createElement("div");
     wrapper.style.margin = "1em 0";
-
-    // Generate slots in working hours
-    const dayName = date.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
-const hours = config.availableHours?.[dayName];
-if (!hours) {
-  wrapper.innerHTML = `<p>😞 No available slots for ${dayName.charAt(0).toUpperCase() + dayName.slice(1)}.</p>`;
-  chatBox.appendChild(wrapper);
-  chatBox.scrollTop = chatBox.scrollHeight;
-  return;
-}
-const [start, end] = hours;
-const startTime = new Date(date); startTime.setHours(...start.split(":").map(Number), 0, 0);
-const endTime = new Date(date); endTime.setHours(...end.split(":").map(Number), 0, 0);
-
-    const duration = config.meetingDuration || 40;
-    const slots = [];
-
-    while (startTime < endTime) {
-      const slotStart = new Date(startTime);
-      const slotEnd = new Date(startTime.getTime() + duration * 60 * 1000);
-
-      const overlaps = busySlots.some(b => {
-        const bStart = new Date(b.start);
-        const bEnd = new Date(b.end);
-        return slotStart < bEnd && bStart < slotEnd;
-      });
-
-      if (!overlaps) {
-        slots.push(new Date(slotStart));
-      }
-
-      startTime.setMinutes(startTime.getMinutes() + 30);
-    }
-
-    if (slots.length === 0) {
-      wrapper.innerHTML = `<p>😞 No available slots today.</p>`;
-    } else {
-      wrapper.innerHTML = `<p>📅 Available times for ${date.toDateString()}:</p>`;
-      for (const s of slots) {
-        const btn = document.createElement("button");
-        btn.innerText = s.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-        btn.style.margin = "3px";
-        btn.onclick = () => {
-          wrapper.remove();
-          resolve(s);
-        };
-        wrapper.appendChild(btn);
-      }
-    }
-
-    const changeBtn = document.createElement("button");
-    changeBtn.innerText = "Pick another date";
-    changeBtn.style = "margin-top: 10px; display: block;";
-    changeBtn.onclick = async () => {
-      wrapper.remove();
-      const picker = document.createElement("input");
-      picker.type = "date";
-      picker.onchange = async () => {
-        const pickedDate = new Date(picker.value);
-        const iso = pickedDate.toISOString().split("T")[0];
-        const res = await fetchWithTimeout(apiUrl(`/availability/${getClientID()}`, { date: iso }, token));
-        const data = await res.json();
-        const next = await showAvailableSlotsPicker(pickedDate, data.busy || [], config);
-        resolve(next);
+    wrapper.innerHTML = `<p>Pick a time (all shown in your local timezone: <b>${userTimezone}</b>):</p>`;
+    slotMap.forEach(slot => {
+      const btn = document.createElement("button");
+      btn.textContent = slot.userLocal;
+      btn.style = "padding:6px 12px;margin:4px;border-radius:6px;";
+      btn.onclick = () => {
+        wrapper.remove();
+        resolve(slot);
       };
-      chatBox.appendChild(picker);
-      chatBox.scrollTop = chatBox.scrollHeight;
+      wrapper.appendChild(btn);
+    });
+    const cancelBtn = document.createElement("button");
+    cancelBtn.textContent = "Cancel";
+    cancelBtn.style = "margin-left:12px;";
+    cancelBtn.onclick = () => {
+      wrapper.remove();
+      resolve(null);
     };
+    wrapper.appendChild(cancelBtn);
 
-    wrapper.appendChild(document.createElement("br"));
-    wrapper.appendChild(changeBtn);
     chatBox.appendChild(wrapper);
     chatBox.scrollTop = chatBox.scrollHeight;
   });
 }
 
-async function startBookingFlow() {
-  bookingInProgress = true; // <--- ADD THIS
-  if (!leadSubmitted) {
-    botReply("Before booking, may I have your name and email?");
-    enableInput();
-    return;
-  }
-
-  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const availability = (config.availableHours && typeof config.availableHours === "object" && !Array.isArray(config.availableHours)) ? config.availableHours : null;
-
-  if (availability) {
-    const days = Object.keys(availability);
-    const windows = days.map(day => {
-      const [start, end] = Array.isArray(availability[day]) ? availability[day] : ["09:00", "17:00"];
-      return `${day.charAt(0).toUpperCase() + day.slice(1)}: ${start} - ${end}`;
-    }).join('<br>');
-    botReply(
-      `📆 <b>Available booking windows</b>:<br>${windows}<br><br>What date and time would you like? <br><i>(e.g., 2025-08-01 4 PM or 'next Friday at noon')</i>`
-    );
-    enableInput();
-  } else {
-    botReply(
-      "What date and time would you like? <br><i>(e.g., 2025-08-01 4 PM or 'next Friday at noon')</i>"
-    );
-    enableInput();
-  }
-
-  const rawInput = await waitForUserInput();
-  showMessage(rawInput, true); // Always show user input first!
-  if (userCancelled(rawInput)) {
-    resetBookingState();
-    userInput.value = ""; // Always clear the field
-    await sendMessage("Booking cancelled.");
-    const feedback = await waitForUserInput();
-    if (userCancelled(feedback)) {
-      userInput.value = ""; // Clear again after feedback
-      insertQuickOptions();
-      return;
-    }
-    userInput.value = ""; // Clear before echoing/processing feedback
-    showMessage(feedback, true);
-    await sendMessage(feedback);
-    insertQuickOptions();
-    return;
-  }
-  userInput.value = "";
-  // 🧠 First try native JavaScript parsing
-  let parsed = new Date(rawInput);
-
-  // ✅ Chrono fallback only if native Date fails
-  if (!parsed || isNaN(parsed.getTime())) {
-    if (typeof chrono === "undefined" || typeof chrono.parseDate !== "function") {
-      botReply("⚠️ Internal error: time parser not available.");
-      enableInput();
-      return;
-    }
-
-    parsed = chrono.parseDate(rawInput);
-    if (!parsed || isNaN(parsed.getTime())) {
-      botReply("❌ I couldn’t understand the time. Please pick manually:");
-      enableInput();
-      const today = new Date();
-      const iso = today.toISOString().split("T")[0];
-      const res = await fetchWithTimeout(`${API_BASE}/availability/${getClientID()}?date=${iso}&token=${token}`);
-      const data = await res.json();
-      parsed = await showAvailableSlotsPicker(today, data.busy || [], config);
-      if (!parsed) {
-        const feedback = await waitForUserInput();
-        if (userCancelled(feedback)) {
-          userInput.value = "";
-          insertQuickOptions();
-          return;
-        }
-        userInput.value = "";
-        showMessage(feedback, true);
-        await sendMessage(feedback);
-        insertQuickOptions();
-        return;
-      }
-    }
-  }
-
-// ❌ If all fail, show fallback picker
-if (!parsed || isNaN(parsed.getTime())) {
-  botReply("❌ I couldn’t understand the time. Please pick manually:");
-  enableInput();
-  const today = new Date();
-  const iso = today.toISOString().split("T")[0];
-  const res = await fetchWithTimeout(`${API_BASE}/availability/${getClientID()}?date=${iso}&token=${token}`);
-  const data = await res.json();
-  parsed = await showAvailableSlotsPicker(today, data.busy || [], config);
-  if (!parsed) {
-    const feedback = await waitForUserInput();
-    if (userCancelled(feedback)) {
-      userInput.value = "";
-      insertQuickOptions();
-      return;
-    }
-    userInput.value = "";
-    showMessage(feedback, true);
-    await sendMessage(feedback);
-    insertQuickOptions();
-    return;
-  }
-}
-
-  const datetime = parsed.toISOString();
-
-  // ⛔ Block outside of available hours if set
-  const day = parsed.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
-  const hours = availability?.[day];
-  if (hours) {
-    const [startHour, endHour] = hours;
-    const [startH, startM] = startHour.split(':').map(Number);
-    const [endH, endM] = endHour.split(':').map(Number);
-    const duration = config.meetingDuration || 40;
-
-    // Create Date objects for slot start and end (in local time)
-    const slotStart = new Date(parsed); // when the meeting starts
-    const slotEnd = new Date(parsed.getTime() + duration * 60 * 1000);
-
-    const availStart = new Date(parsed);
-    availStart.setHours(startH, startM, 0, 0);
-    const availEnd = new Date(parsed);
-    availEnd.setHours(endH, endM, 0, 0);
-
-    if (slotStart < availStart || slotEnd > availEnd) {
-      botReply(`❌ That time is outside your availability for ${day}. Please try a different time.`);
-      enableInput();
-      return;
-    }
-  }
-
-// 📝 Ask for purpose
-botReply("What’s the purpose of this meeting?");
-const purpose = await waitForUserInput();
-if (userCancelled(purpose)) {
-  resetBookingState();
-  await sendMessage("Booking cancelled.");
-  const feedback = await waitForUserInput();
-  if (userCancelled(feedback)) {
-    insertQuickOptions();
-    return;
-  }
-  // If not cancelled, treat as normal chat
-  await sendMessage(feedback);
-  insertQuickOptions();
-  return;
-}
-const lastPurpose = purpose;
-userInput.value = "";
-showMessage(purpose, true);
-
-// ✅ Show full summary and ask for final confirmation
-const duration = config.meetingDuration || 40;
-botReply(
-  `📅 Meeting at: ${parsed.toLocaleString()} (${timezone})\n📝 Purpose: ${purpose}\n⏱️ Duration: ${duration} minutes`
-);
-botReply("Confirm this booking? (yes / no)");
-const confirm = await waitForUserInput();
-if (userCancelled(confirm) || !/^y(es)?$/i.test(confirm)) {
-  resetBookingState();
-  bookingInProgress = false; // <--- ADD THIS
-  userInput.value = "";
-  await sendMessage("Booking cancelled.");
-  userInput.disabled = false;
-  sendBtn.disabled = false;
-  const feedback = await waitForUserInput();
-  if (userCancelled(feedback)) {
-    userInput.value = "";
-    insertQuickOptions();
-    return;
-  }
-  userInput.value = "";
-  showMessage(feedback, true);
-  await sendMessage(feedback);
-  insertQuickOptions();
-  return;
-}
-userInput.value = "";
-showMessage(confirm, true);
-
-console.log("Booking payload:", {
-  client_id, token,
-  name: userName,
-  email: userEmail,
-  datetime,
-  timezone,
-  purpose,
-  bookingProvider: config.bookingProvider
-});
-
-// ✅ Send booking request
-showMessage("Booking your appointment…", false, true);
-if (replySound) replySound.play();
-try {
-  const res = await fetchWithTimeout(`${API_BASE}/book`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      client_id, token,
-      name: userName,
-      email: userEmail,
-      datetime,
-      timezone,
-      purpose,
-      bookingProvider: config.bookingProvider
-    })
-  });
-
-  const typingEl = chatBox.querySelector(".msg-wrapper.bot .typing");
-  if (typingEl) typingEl.closest(".msg-wrapper").remove();
-
-  if (!res.ok) {
-    let err = {}, msg = "Unknown error";
-    try {
-      err = await res.json();
-      msg = getErrorMsg(err);
-    } catch (e) {
-      msg = await res.text() || "Unknown error";
-    }
-
-    // Handle backend error: Outside available hours
-    if (typeof msg === "string" && msg.toLowerCase().includes("outside available hours")) {
-      botReply("The time you selected is outside our available hours. Would you like to pick another time? (yes/no)");
-      const response = await waitForUserInput();
-      if (userCancelled(response)) {
-        resetBookingState();
-        userInput.value = "";
-        await sendMessage("Booking cancelled!");
-        const feedback = await waitForUserInput();
-        if (userCancelled(feedback)) {
-          userInput.value = "";
-          insertQuickOptions();
-          return;
-        }
-        userInput.value = "";
-        showMessage(feedback, true);
-        await sendMessage(feedback);
-        insertQuickOptions();
-        return;
-      } else if (/^y(es)?$/i.test(response)) {
-        // Show time picker logic here
-        const today = new Date();
-        const iso = today.toISOString().split("T")[0];
-        const res2 = await fetchWithTimeout(apiUrl(`/availability/${getClientID()}`, { date: iso }, token));
-        const data2 = await res2.json();
-        const picked = await showAvailableSlotsPicker(today, data2.busy || [], config);
-        if (!picked) {
-          const feedback = await waitForUserInput();
-          if (userCancelled(feedback)) {
-            userInput.value = "";
-            insertQuickOptions();
-            return;
-          }
-          userInput.value = "";
-          showMessage(feedback, true);
-          await sendMessage(feedback);
-          insertQuickOptions();
-          return;
-        }
-        // Continue booking with picked time if needed
-        // Optionally ask for new purpose here
-      } else {
-        // fallback, treat as cancel
-        resetBookingState();
-        await sendMessage("Booking cancelled.");
-        botReply("Okay, no booking for now. What else can I help with?");
-        const feedback = await waitForUserInput();
-        if (userCancelled(feedback)) {
-          insertQuickOptions();
-          return;
-        }
-        // If not cancelled, treat as normal chat
-        await sendMessage(feedback);
-        insertQuickOptions();
-        return;
-      }
-    }
-
-    // Clean up ugly error objects if backend returns JSON as a string
-    if (typeof msg === "string") {
-      msg = msg.replace(/^({?"error":")/, '').replace(/"}$/, '');
-    }
-
-    console.error("Booking error:", err);
-
-    // 🧠 Check for suggested time (e.g. backend gives next available)
-    if (err && typeof err === "object" && err.suggested) {
-      const suggestedDate = new Date(err.suggested);
-      botReply(`⚠️ ${msg}`);
-      botReply(`📅 Next available time: ${suggestedDate.toLocaleString()} — Want to book this instead? (yes / no)`);
-      const retry = await waitForUserInput();
-      userInput.value = "";
-      showMessage(retry, true);
-
-      if (/^y(es)?$/i.test(retry)) {
-        // If user wants to use suggested, ask if they want to reuse the previous purpose
-        botReply("Use the same purpose as before? (yes / no)");
-        const useSamePurpose = await waitForUserInput();
-        userInput.value = "";
-        showMessage(useSamePurpose, true);
-
-        if (/^y(es)?$/i.test(useSamePurpose)) {
-          // Book with previous purpose
-          return await bookSlot({
-            datetime: suggestedDate.toISOString(),
-            purpose: lastPurpose
-          });
-        } else {
-          // Ask for new purpose
-          botReply("What's the new purpose of this meeting?");
-          const newPurpose = await waitForUserInput();
-          userInput.value = "";
-          showMessage(newPurpose, true);
-          return await bookSlot({
-            datetime: suggestedDate.toISOString(),
-            purpose: newPurpose
-          });
-        }
-      } else {
-        botReply("Okay, you can pick another time.");
-        enableInput();
-        // Continue to available time picker below if desired
-      }
-    }
-
-    // 👉 Always show available windows after error!
-    if (availability) {
-      const days = Object.keys(availability);
-      const windows = days.map(day => {
-        const [start, end] = availability[day];
-        return `${day.charAt(0).toUpperCase() + day.slice(1)}: ${start} - ${end}`;
-      }).join('<br>');
-      botReply(`⚠️ ${msg}<br><br>📆 <b>Available booking windows</b>:<br>${windows}<br><br>Let’s pick a valid time now:`);
-      enableInput();
-    } else {
-      botReply(`⚠️ ${msg}<br>Let’s pick a valid time now:`);
-      enableInput();
-    }
-
-    // 🔥 Instantly show available times for today, let user pick
-    const today = new Date();
-    const iso = today.toISOString().split("T")[0];
-    const res2 = await fetchWithTimeout(apiUrl(`/availability/${getClientID()}`, { date: iso }, token));
-    const data2 = await res2.json();
-    const picked = await showAvailableSlotsPicker(today, data2.busy || [], config);
-    if (!picked) return botReply("❌ Booking cancelled.");
-
-    // Ask if they want to reuse last purpose or enter a new one
-    botReply("Would you like to use the same purpose as before? (yes / no)");
-    const reusePurpose = await waitForUserInput();
-    userInput.value = "";
-    showMessage(reusePurpose, true);
-
-    if (/^y(es)?$/i.test(reusePurpose)) {
-      // Book with same purpose
-      return await bookSlot({ datetime: picked.toISOString(), purpose: lastPurpose });
-    } else {
-      botReply("What's the new purpose of this meeting?");
-      const newPurpose = await waitForUserInput();
-      userInput.value = "";
-      showMessage(newPurpose, true);
-      return await bookSlot({ datetime: picked.toISOString(), purpose: newPurpose });
-    }
-  }
-
-  // SUCCESS: Got confirmation link
-  const { confirmation_link } = await res.json();
-  chatLog += `Booked ${datetime}: ${confirmation_link}\n`;
-  botReply(`✅ Your appointment is booked for ${parsed.toLocaleString()}!\n${linkify(confirmation_link)}`);
-  bookingInProgress = false; // <--- ADD THIS
-  botReply("Anything else I can help you with?");
-  enableInput();
-  insertQuickOptions();
-  insertRatingWidget();
-
-} catch (error) {
-  console.error("[startBookingFlow] Booking error:", error);
-  botReply("⚠️ Couldn’t complete booking. Please try again.", true);
-  userInput.disabled = false;
-  sendBtn.disabled = false;
-}
-}
-
-// OUTSIDE startBookingFlow, declare bookSlot:
-async function bookSlot({ datetime, purpose }) {
-  const parsed = new Date(datetime);
-  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const duration = config.meetingDuration || 40;
-
-  // Confirm booking
-  botReply(
-    `📅 Suggested: ${parsed.toLocaleString()} (${timezone})\n📝 Purpose: ${purpose}\n⏱️ Duration: ${duration} minutes`
-  );
-  botReply("Book this time? (yes / no)");
-  const confirm = await waitForUserInput();
-  if (userCancelled(confirm) || !/^y(es)?$/i.test(confirm)) {
-    resetBookingState();
-    bookingInProgress = false; // <--- ADD THIS
-    userInput.value = "";
-    await sendMessage("Booking cancelled.");
-    const feedback = await waitForUserInput();
-    if (userCancelled(feedback)) {
-      userInput.value = "";
-      insertQuickOptions();
-      return;
-    }
-    userInput.value = "";
-    showMessage(feedback, true);
-    await sendMessage(feedback);
-    insertQuickOptions();
-    return;
-  }
-  userInput.value = "";
-  showMessage(confirm, true);
-
-  showMessage("Booking your appointment…", false, true);
-  if (replySound) replySound.play();
-
-  try {
-    const res = await fetchWithTimeout(`${API_BASE}/book`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        client_id,
-        token,
-        name: userName,
-        email: userEmail,
-        datetime,
-        timezone,
-        purpose,
-        bookingProvider: config.bookingProvider,
-      }),
-    });
-
-    const typingEl = chatBox.querySelector(".msg-wrapper.bot .typing");
-    if (typingEl) typingEl.closest(".msg-wrapper").remove();
-
-    if (!res.ok) {
-      let msg = "Unknown error";
-      try {
-        const err = await res.json();
-        msg = getErrorMsg(err);
-      } catch (e) {
-        msg = await res.text() || "Unknown error";
-      }
-      botReply(`⚠️ ${msg}`);
-      enableInput();
-      return;
-    }
-
-    const { confirmation_link } = await res.json();
-    chatLog += `Booked ${datetime}: ${confirmation_link}\n`;
-    botReply(
-      `✅ Your appointment is booked for ${parsed.toLocaleString()}!\n${linkify(confirmation_link)}`
-    );
-    botReply("Anything else I can help you with?");
-    enableInput();
-    insertQuickOptions();
-    insertRatingWidget();
-  } catch (error) {
-    console.error("[bookSlot] Booking error:", error);
-    botReply("⚠️ Couldn’t complete booking. Please try again.", true);
-    userInput.disabled = false;
-    sendBtn.disabled = false;
-  }
-}
 
 async function handleInput() {
   const txt = userInput.value.trim();
@@ -1096,16 +640,12 @@ async function handleInput() {
   }
 
   // --- Main logic after lead is captured ---
-  if (leadSubmitted) {
-    // Only trigger booking if user shows booking intent!
-    const parsed = parseBookingIntent(txt);
-    if (parsed.intent === "booking") {
-      bookingState.inProgress = true;
-      if (parsed.date) bookingState.date = parsed.date;
-      if (parsed.time) bookingState.time = parsed.time;
-      return startBookingFlow();
-    }
-
+if (leadSubmitted) {
+  // Only trigger booking if user shows booking intent!
+  if (/\b(book|schedule|appointment|meeting)\b/i.test(txt)) {
+    bookingState.inProgress = true;
+    return startBookingFlow();
+  }
     // Handoff to human agent if user requests it
     if (/human|agent|real person|support|help/i.test(txt)) {
       botReply(config.handoff?.intro || "Connecting you to a human agent...", false);

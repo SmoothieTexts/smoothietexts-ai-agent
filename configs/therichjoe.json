@@ -16,6 +16,7 @@
   "bubbleMessage": "Need help? Ask JoeBot.",
   "meetingDuration": "30",
   "bookingProvider": "google",
+  "timezone": "America/New_York",
   "availableHours": {
     "monday": ["09:00", "17:00"],
     "tuesday": ["09:00", "17:00"],

@@ -49,6 +49,7 @@ window.__247CONVO_CONFIG__ = {
 
   // ─── NEW: which provider to use for booking ("zoom", "google", or "microsoft")
   bookingProvider: "google",
+  timezone: "America/New_York",
   availableHours: {
     monday: ["09:00", "17:00"],
     tuesday: ["10:00", "16:00"],

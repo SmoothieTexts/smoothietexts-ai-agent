@@ -347,6 +347,16 @@ async def book(req: Request):
     # 🟢 ADD THIS LINE:
     day_name = dt.strftime("%A").lower()
 
+    # 🔻🔻🔻 Add logging here 🔻🔻🔻
+    print(f"---- BOOKING DEBUG ----")
+    print(f"Incoming datetime string: {dt_str}")
+    print(f"Parsed UTC datetime: {parser.isoparse(dt_str)}")
+    print(f"Converted to {timezone}: {dt}")
+    print(f"Available hours for {day_name}: {cfg.get('availableHours', {}).get(day_name)}")
+    print(f"Meeting duration: {cfg.get('meetingDuration', 40)} min")
+    print(f"-----------------------")
+    # 🔺🔺🔺 End logging 🔺🔺🔺
+
     if not is_within_available_hours(dt, cfg):
         raise HTTPException(409, {"error": f"That time is not available. Please pick a slot within working hours for {day_name.title()}."})
 
