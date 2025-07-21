@@ -316,6 +316,7 @@ function getErrorMsg(err) {
     function botReply(text, isError = false) {
       showMessage(`${chatbotName}: ${text}`, false, false, "", isError);
       replySound?.play();
+      setTimeout(() => userInput.focus(), 0);
     }
 
     function insertQuickOptions() {
@@ -331,28 +332,38 @@ function getErrorMsg(err) {
       chatBox.scrollTop = chatBox.scrollHeight;
     }
 
-    function waitForUserInput() {
-      return new Promise(resolve => {
-        function onKey(e) {
-          if (e.key === "Enter") {
-            e.stopImmediatePropagation();
-            cleanup();
-            resolve(userInput.value.trim());
-          }
-        }
-        function onClick(e) {
-          e.stopImmediatePropagation();
-          cleanup();
-          resolve(userInput.value.trim());
-        }
-        function cleanup() {
-          userInput.removeEventListener("keydown", onKey, true);
-          sendBtn.removeEventListener("click", onClick, true);
-        }
-        userInput.addEventListener("keydown", onKey, true);
-        sendBtn.addEventListener("click", onClick, true);
-      });
+function waitForUserInput() {
+  return new Promise(resolve => {
+    function onKey(e) {
+      if (e.key === "Enter") {
+        e.stopImmediatePropagation();
+        cleanup();
+        const val = userInput.value.trim();
+        userInput.value = "";        // <-- clear input here
+        setTimeout(() => userInput.focus(), 0); // <-- auto-focus input
+        resolve(val);
+      }
     }
+    function onClick(e) {
+      e.stopImmediatePropagation();
+      cleanup();
+      const val = userInput.value.trim();
+      userInput.value = "";        // <-- clear input here
+      setTimeout(() => userInput.focus(), 0); // <-- auto-focus input
+      resolve(val);
+    }
+    function cleanup() {
+      userInput.removeEventListener("keydown", onKey, true);
+      sendBtn.removeEventListener("click", onClick, true);
+    }
+    userInput.addEventListener("keydown", onKey, true);
+    sendBtn.addEventListener("click", onClick, true);
+    sendBtn.disabled = false; // Enable send btn, keep input enabled
+    userInput.disabled = false; // Always keep input enabled
+    setTimeout(() => userInput.focus(), 0); // Focus as soon as active
+  });
+}
+
 
     function fetchWithTimeout(resource, options = {}) {
       const { timeout = 15000 } = options;
@@ -565,7 +576,6 @@ async function handleInput() {
   const txt = userInput.value.trim();
   if (!txt) return;
   // 🚦 Disable input/button to prevent double submit
-  userInput.disabled = true;
   sendBtn.disabled = true;
 
   showMessage(txt, true);
@@ -665,7 +675,7 @@ function stripTags(str) {
 
 async function sendMessage(txt) {
   const id = `msg-${Date.now()}`;
-  showMessage("<em>Loading...</em>", false, true, id); // Shows "Loading..." with typing effect
+  showMessage("<em>Loading...</em>", false, true, id); // Shows "..." with typing effect
   chatLog += `You: ${txt}\n`;
 
   if (!token) {
