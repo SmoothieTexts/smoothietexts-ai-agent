@@ -531,26 +531,21 @@ async function showDatePicker(config) {
     wrapper.style.margin = "1em 0";
     wrapper.innerHTML = `
       <label>Select a date:</label><br/>
-      <input type="text" id="manualDate" style="padding:5px;margin:5px 0;" autocomplete="off" />
-      <div style="font-size:0.85em;color:#888;">(Only available dates can be selected.)</div>
+      <input type="text" id="manualDate" style="padding:5px;margin:5px 0;" autocomplete="off" placeholder="Click to select date 📅" readonly />
+      <div style="font-size:0.85em;color:#888;">(Only available dates can be selected. Use the calendar.)</div>
     `;
     chatBox.appendChild(wrapper);
     chatBox.scrollTop = chatBox.scrollHeight;
 
     const dateInput = wrapper.querySelector("#manualDate");
-
-    // Build allowedDays from config (e.g. ["monday", "wednesday", "friday"])
     const allowedDays = Object.keys(config.availableHours || {}).map(s => s.toLowerCase());
-
-    // Initialize flatpickr after DOM is updated
     setTimeout(() => {
       flatpickr(dateInput, {
         minDate: "today",
-        maxDate: new Date().fp_incr(60), // 60 days ahead
+        maxDate: new Date().fp_incr(180), // 180 days ahead
         dateFormat: "Y-m-d",
         disable: [
           function(date) {
-            // Returns true to disable this date (i.e. not in allowedDays)
             const dayName = date.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
             return !allowedDays.includes(dayName);
           }

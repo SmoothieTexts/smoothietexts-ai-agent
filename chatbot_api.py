@@ -338,26 +338,29 @@ async def book(req: Request):
     try:
         import pytz
         dt = parser.isoparse(dt_str)
-        tz = pytz.timezone(timezone)
-        dt = dt.astimezone(tz)
+        # Always use your BUSINESS timezone for availability logic!
+        cfg_timezone = cfg.get("timezone", "UTC")
+        biz_tz = pytz.timezone(cfg_timezone)
+        dt_biz = dt.astimezone(biz_tz)
     except Exception as ex:
-        print(f"[Timezone Parse Error] dt_str={dt_str} timezone={timezone} error={ex}")
+        print(f"[Timezone Parse Error] dt_str={dt_str} error={ex}")
         dt = parser.isoparse(dt_str).astimezone(datetime.timezone.utc)
+        cfg_timezone = cfg.get("timezone", "UTC")
+        biz_tz = pytz.timezone(cfg_timezone)
+        dt_biz = dt.astimezone(biz_tz)
 
-    # 🟢 ADD THIS LINE:
-    day_name = dt.strftime("%A").lower()
+    day_name = dt_biz.strftime("%A").lower()
 
-    # 🔻🔻🔻 Add logging here 🔻🔻🔻
+    # Logging (keep for debug!)
     print(f"---- BOOKING DEBUG ----")
     print(f"Incoming datetime string: {dt_str}")
     print(f"Parsed UTC datetime: {parser.isoparse(dt_str)}")
-    print(f"Converted to {timezone}: {dt}")
+    print(f"Converted to BUSINESS timezone ({cfg_timezone}): {dt_biz}")
     print(f"Available hours for {day_name}: {cfg.get('availableHours', {}).get(day_name)}")
     print(f"Meeting duration: {cfg.get('meetingDuration', 40)} min")
     print(f"-----------------------")
-    # 🔺🔺🔺 End logging 🔺🔺🔺
 
-    if not is_within_available_hours(dt, cfg):
+    if not is_within_available_hours(dt_biz, cfg):
         raise HTTPException(409, {"error": f"That time is not available. Please pick a slot within working hours for {day_name.title()}."})
 
     duration_minutes = int(cfg.get("meetingDuration", 40))
