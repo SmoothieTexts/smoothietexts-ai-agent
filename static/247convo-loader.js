@@ -2,7 +2,7 @@
 // Purpose: Inject per-client config, CSS, HTML fragment, and main chat logic—no CORS fetches.
 
 (function(){
-  // ── 0️⃣ Determine client_id from this loader’s own <script> URL
+  // 0️⃣ Determine client_id from this loader’s own <script> URL
   let client_id = 'default';
   (function(){
     const scripts = document.getElementsByTagName('script');
@@ -15,33 +15,40 @@
     }
   })();
 
-  // ── 1️⃣ Inject per-client config script (no JSON fetch)
+  // 1️⃣ Inject per-client config script (no JSON fetch)
   const configScript = document.createElement('script');
   configScript.src   = `https://two47ctest.onrender.com/static/config-${client_id}.js`;
   configScript.defer = true;
   document.head.appendChild(configScript);
 
-  // ── 2️⃣ Load widget CSS via <link> (avoids CORS)
+  // 2️⃣ Load widget CSS via <link> (avoids CORS)
   const link = document.createElement('link');
   link.rel  = 'stylesheet';
   link.href = 'https://two47ctest.onrender.com/static/247convo-style.css';
   document.head.appendChild(link);
 
-  // ── 3️⃣ Inject the HTML fragment via script tag
+  // 3️⃣ Inject flatpickr CSS
+  const fpCss = document.createElement('link');
+  fpCss.rel  = 'stylesheet';
+  fpCss.href = 'https://two47ctest.onrender.com/static/flatpickr.min.css';
+  document.head.appendChild(fpCss);
+
+  // 4️⃣ Inject the HTML fragment via script tag
   const fragmentScript = document.createElement('script');
   fragmentScript.src   = 'https://two47ctest.onrender.com/static/widget-fragment.js';
   fragmentScript.defer = true;
   document.body.appendChild(fragmentScript);
 
-// Load chrono bundle first, then widget script
-const chronoScript = document.createElement('script');
-chronoScript.src = 'https://two47ctest.onrender.com/static/chrono.bundle.js';
-chronoScript.onload = () => {
-  const widgetScript = document.createElement('script');
-  widgetScript.src   = `https://two47ctest.onrender.com/static/247convo-script.js?client_id=${client_id}`;
-  widgetScript.defer = true;
-  document.body.appendChild(widgetScript);
-};
-document.head.appendChild(chronoScript);
+  // 5️⃣ Inject flatpickr JS, then widget script
+  const fpScript = document.createElement('script');
+  fpScript.src   = 'https://two47ctest.onrender.com/static/flatpickr.min.js';
+  fpScript.onload = () => {
+    // Load widget script only AFTER flatpickr is ready
+    const widgetScript = document.createElement('script');
+    widgetScript.src   = `https://two47ctest.onrender.com/static/247convo-script.js?client_id=${client_id}`;
+    widgetScript.defer = true;
+    document.body.appendChild(widgetScript);
+  };
+  document.head.appendChild(fpScript);
 
 })();

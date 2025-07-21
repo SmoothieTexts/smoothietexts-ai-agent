@@ -433,6 +433,7 @@ async function startBookingFlow() {
     Duration: ${config.meetingDuration || 40} min`
   );
   botReply("Proceed with this booking? (yes/no)");
+  enableInput();
   const confirm = await waitForUserInput();
   if (!/^y(es)?$/i.test(confirm)) {
     botReply("Booking cancelled.");
@@ -442,6 +443,7 @@ async function startBookingFlow() {
 
   // STEP 5: Ask for meeting purpose
   botReply("What’s the purpose of this meeting?");
+  enableInput();
   const purpose = await waitForUserInput();
 
   // STEP 6: Send booking request to backend
@@ -492,54 +494,41 @@ async function showDatePicker(config) {
     wrapper.style.margin = "1em 0";
     wrapper.innerHTML = `
       <label>Select a date:</label><br/>
-      <input type="date" id="manualDate" style="padding:5px;margin:5px 0;" />
-      <div id="slotButtons" style="margin-top: 1em;"></div>
-      <div style="font-size:0.85em;color:#888;">(Only dates with availability will be selectable.)</div>
+      <input type="text" id="manualDate" style="padding:5px;margin:5px 0;" autocomplete="off" />
+      <div style="font-size:0.85em;color:#888;">(Only available dates can be selected.)</div>
     `;
     chatBox.appendChild(wrapper);
     chatBox.scrollTop = chatBox.scrollHeight;
 
     const dateInput = wrapper.querySelector("#manualDate");
 
-    // Only enable days with config.availableHours (backend ensures busy days are blocked)
-    const allowedDays = Object.keys(config.availableHours || {});
-    const today = new Date();
-    let minDate = today;
-    let maxDate = new Date();
-    maxDate.setDate(today.getDate() + 60);
+    // Build allowedDays from config (e.g. ["monday", "wednesday", "friday"])
+    const allowedDays = Object.keys(config.availableHours || {}).map(s => s.toLowerCase());
 
-    // Helper to format date as YYYY-MM-DD
-    const fmt = d => d.toISOString().split("T")[0];
-    dateInput.min = fmt(minDate);
-    dateInput.max = fmt(maxDate);
-
-    // Disable unavailable days
-    dateInput.addEventListener("input", function() {
-      const d = new Date(this.value);
-      const dayName = d.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
-      if (!allowedDays.includes(dayName)) {
-        this.setCustomValidity("No slots available on this day.");
-        this.value = "";
-        this.reportValidity();
-      } else {
-        this.setCustomValidity("");
-        resolve(d);
-        wrapper.remove();
-      }
-    });
-
-    // Prefill the picker with the first valid day
-    let probe = new Date(today);
-    for (let i = 0; i < 60; i++) {
-      const dayName = probe.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
-      if (allowedDays.includes(dayName)) {
-        dateInput.value = fmt(probe);
-        break;
-      }
-      probe.setDate(probe.getDate() + 1);
-    }
+    // Initialize flatpickr after DOM is updated
+    setTimeout(() => {
+      flatpickr(dateInput, {
+        minDate: "today",
+        maxDate: new Date().fp_incr(60), // 60 days ahead
+        dateFormat: "Y-m-d",
+        disable: [
+          function(date) {
+            // Returns true to disable this date (i.e. not in allowedDays)
+            const dayName = date.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
+            return !allowedDays.includes(dayName);
+          }
+        ],
+        onChange: function(selectedDates) {
+          if (selectedDates.length) {
+            resolve(selectedDates[0]);
+            wrapper.remove();
+          }
+        }
+      });
+    }, 0);
   });
 }
+
 
 
 async function showTimePicker(slotMap, userTimezone, businessTimezone) {
@@ -782,20 +771,19 @@ const playOnce = () => {
 );
   } // <--- CLOSES THE async function run() BLOCK
 
-function waitForChronoThenRun() {
-    if (typeof chrono !== "undefined") {
-      run();
-    } else {
-      setTimeout(waitForChronoThenRun, 50);
-    }
-  }
-
-  if (document.readyState === "loading") {
-    window.addEventListener("DOMContentLoaded", waitForChronoThenRun);
+function waitForFlatpickrThenRun() {
+  if (typeof flatpickr !== "undefined") {
+    run();
   } else {
-    waitForChronoThenRun();
+    setTimeout(waitForFlatpickrThenRun, 30);
   }
+}
 
+if (document.readyState === "loading") {
+  window.addEventListener("DOMContentLoaded", waitForFlatpickrThenRun);
+} else {
+  waitForFlatpickrThenRun();
+}
   window.addEventListener("error", function(e) {
     console.error("[GLOBAL ERROR]", e.error || e.message || e);
   });
