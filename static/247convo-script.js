@@ -8,7 +8,7 @@
   const API_BASE         = "https://two47cbackend.onrender.com";
 
 // ⬇️⬇️⬇️ Add the helper RIGHT HERE ⬇️⬇️⬇️
-function apiUrl(path, params = {}) {
+function apiUrl(path, params = {}, token = "") {
   const qp = Object.entries({ ...params, token }).map(
     ([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`
   ).join('&');
@@ -376,7 +376,7 @@ function getErrorMsg(err) {
     }
 
 async function fetchBusyTimes(dateStr) {
-  const res = await fetchWithTimeout(apiUrl(`/availability/${getClientID()}`, { date: dateStr }));
+  const res = await fetchWithTimeout(apiUrl('/availability/' + getClientID(), { date: dateStr }, token));
   if (!res.ok) return null;
   const data = await res.json();
   return data.busy || [];
@@ -384,7 +384,7 @@ async function fetchBusyTimes(dateStr) {
 
 
 async function getAvailableSlots(dateStr) {
-  const res = await fetchWithTimeout(apiUrl(`/availability/${client_id}`, { date: dateStr }));
+  const res = await fetchWithTimeout(apiUrl('/availability/' + getClientID(), { date: dateStr }, token));
   if (!res.ok) return [];
   const data = await res.json();
   return data.slots || []; // Always use 'slots' key, never 'available'
@@ -440,7 +440,7 @@ async function showDateTimePicker() {
     async function fetchAndRenderSlots(dateStr) {
       slotContainer.innerHTML = `<span>Loading available times…</span>`;
       try {
-        const res = await fetchWithTimeout(apiUrl(`/availability/${client_id}`, { date: dateStr }));
+        const res = await fetchWithTimeout(apiUrl('/availability/' + getClientID(), { date: dateStr }, token));
         const data = await res.json();
 
         if (!data.slots || data.slots.length === 0) {
@@ -542,7 +542,7 @@ const endTime = new Date(date); endTime.setHours(...end.split(":").map(Number), 
       picker.onchange = async () => {
         const pickedDate = new Date(picker.value);
         const iso = pickedDate.toISOString().split("T")[0];
-        const res = await fetchWithTimeout(apiUrl(`/availability/${getClientID()}`, { date: iso }));
+        const res = await fetchWithTimeout(apiUrl(`/availability/${getClientID()}`, { date: iso }, token));
         const data = await res.json();
         const next = await showAvailableSlotsPicker(pickedDate, data.busy || [], config);
         resolve(next);
@@ -804,7 +804,7 @@ try {
         // Show time picker logic here
         const today = new Date();
         const iso = today.toISOString().split("T")[0];
-        const res2 = await fetchWithTimeout(apiUrl(`/availability/${getClientID()}`, { date: iso }));
+        const res2 = await fetchWithTimeout(apiUrl(`/availability/${getClientID()}`, { date: iso }, token));
         const data2 = await res2.json();
         const picked = await showAvailableSlotsPicker(today, data2.busy || [], config);
         if (!picked) {
@@ -903,7 +903,7 @@ try {
     // 🔥 Instantly show available times for today, let user pick
     const today = new Date();
     const iso = today.toISOString().split("T")[0];
-    const res2 = await fetchWithTimeout(apiUrl(`/availability/${getClientID()}`, { date: iso }));
+    const res2 = await fetchWithTimeout(apiUrl(`/availability/${getClientID()}`, { date: iso }, token));
     const data2 = await res2.json();
     const picked = await showAvailableSlotsPicker(today, data2.busy || [], config);
     if (!picked) return botReply("❌ Booking cancelled.");
