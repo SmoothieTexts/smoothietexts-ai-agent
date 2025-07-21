@@ -331,6 +331,11 @@ async def book(req: Request):
         raise HTTPException(400, {"error": "Invalid email format"})
 
     cfg = fetch_config(cid)
+    print(f"Loaded config: {cfg}")
+    day_name = dt.strftime("%A").lower()
+    available_hours = cfg.get("availableHours", {})
+    print(f"Day name: {day_name}, availableHours: {available_hours}, keys: {list(available_hours.keys())}")
+    print(f"Available hours for {day_name}: {available_hours.get(day_name)}")
     provider = p.get("bookingProvider") or cfg.get("bookingProvider")
     if not provider:
         raise HTTPException(400, {"error": "No booking provider configured."})
