@@ -177,6 +177,7 @@ function getErrorMsg(err) {
     let leadSubmitted = false;
     let collecting    = "name";
     let bookingState  = { inProgress: false, date: null, time: null };
+    let bookingInProgress = false;
 
     let conversationHistory = [];
     function updateConversationHistory(user, bot) {
