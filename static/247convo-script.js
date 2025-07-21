@@ -405,8 +405,13 @@ async function startBookingFlow() {
   const pickedDate = await showDatePicker(config);
   if (!pickedDate) {
     botReply("Booking cancelled.");
-    bookingInProgress = false;
-    return;
+  bookingInProgress = false;
+  bookingState = { inProgress: false, date: null, time: null };
+  userInput.disabled = false;
+  sendBtn.disabled = false;
+  insertQuickOptions();
+  setTimeout(() => userInput.focus(), 0);
+  return;
   }
 
   // STEP 2: Fetch available slots for that day from backend (all in UTC ISO)
@@ -427,12 +432,17 @@ async function startBookingFlow() {
   }));
 
   botReply(`Available times for ${pickedDate.toDateString()}:`);
-  const pickedSlot = await showTimePicker(slotMap, userTimezone, businessTimezone);
-  if (!pickedSlot) {
-    botReply("Booking cancelled.");
-    bookingInProgress = false;
-    return;
-  }
+const pickedSlot = await showTimePicker(slotMap, userTimezone, businessTimezone);
+if (!pickedSlot) {
+  botReply("Booking cancelled.");
+  bookingInProgress = false;
+  bookingState = { inProgress: false, date: null, time: null };
+  userInput.disabled = false;
+  sendBtn.disabled = false;
+  insertQuickOptions();
+  setTimeout(() => userInput.focus(), 0);
+  return;
+}
 
   // STEP 4: Confirm booking with both timezones shown
   const slotUserTZ = new Date(pickedSlot.utc).toLocaleString(undefined, { timeZone: userTimezone });
@@ -448,8 +458,13 @@ async function startBookingFlow() {
   const confirm = await waitForUserInput();
   if (!/^y(es)?$/i.test(confirm)) {
     botReply("Booking cancelled.");
-    bookingInProgress = false;
-    return;
+  bookingInProgress = false;
+  bookingState = { inProgress: false, date: null, time: null };
+  userInput.disabled = false;
+  sendBtn.disabled = false;
+  insertQuickOptions();
+  setTimeout(() => userInput.focus(), 0);
+  return;
   }
 
   // STEP 5: Ask for meeting purpose
@@ -477,11 +492,22 @@ async function startBookingFlow() {
       })
     });
 
-    if (!res.ok) {
-      botReply("Couldn’t book slot. Try again.");
-      bookingInProgress = false;
-      return;
-    }
+if (!res.ok) {
+  let msg = "Couldn’t book slot. Try again.";
+  try {
+    const err = await res.json();
+    if (err.error) msg = err.error;
+  } catch { }
+  botReply(msg);
+  bookingInProgress = false;
+  bookingState = { inProgress: false, date: null, time: null };
+  userInput.disabled = false;
+  sendBtn.disabled = false;
+  insertQuickOptions();
+  setTimeout(() => userInput.focus(), 0);
+  return;
+}
+
 
     const { confirmation_link } = await res.json();
     botReply(`✅ Appointment booked!<br>
@@ -587,11 +613,12 @@ async function handleInput() {
       bookingInProgress = false;
       resetBookingState();
       await sendMessage("Booking cancelled.");
-      botReply("Booking process reset. What else can I help you with?");
-      insertQuickOptions();
-      userInput.disabled = false;
-      sendBtn.disabled = false;
-      return;
+  bookingState = { inProgress: false, date: null, time: null };
+  userInput.disabled = false;
+  sendBtn.disabled = false;
+  insertQuickOptions();
+  setTimeout(() => userInput.focus(), 0);
+  return;
     }
     if (/continue/i.test(txt)) {
       return await startBookingFlow();
@@ -605,11 +632,13 @@ async function handleInput() {
   if (/start over/i.test(txt)) {
     resetBookingState();
     await sendMessage("Booking cancelled."); // sync to backend/context
-    botReply("Booking process reset. What else can I help you with?");
-    insertQuickOptions();
-    userInput.disabled = false;
-    sendBtn.disabled = false;
-    return;
+  bookingInProgress = false;
+  bookingState = { inProgress: false, date: null, time: null };
+  userInput.disabled = false;
+  sendBtn.disabled = false;
+  insertQuickOptions();
+  setTimeout(() => userInput.focus(), 0);
+  return;
   }
   // ⬆️ END OF BLOCK
 
