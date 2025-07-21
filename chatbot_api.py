@@ -332,18 +332,13 @@ async def book(req: Request):
 
     cfg = fetch_config(cid)
     print(f"Loaded config: {cfg}")
-    day_name = dt.strftime("%A").lower()
-    available_hours = cfg.get("availableHours", {})
-    print(f"Day name: {day_name}, availableHours: {available_hours}, keys: {list(available_hours.keys())}")
-    print(f"Available hours for {day_name}: {available_hours.get(day_name)}")
-    provider = p.get("bookingProvider") or cfg.get("bookingProvider")
-    if not provider:
-        raise HTTPException(400, {"error": "No booking provider configured."})
+    if not cfg or not cfg.get("availableHours"):
+        raise HTTPException(500, {"error": "Booking config missing or not loaded for client: " + cid})
 
+    # Only now parse dt...
     try:
         import pytz
         dt = parser.isoparse(dt_str)
-        # Always use your BUSINESS timezone for availability logic!
         cfg_timezone = cfg.get("timezone", "UTC")
         biz_tz = pytz.timezone(cfg_timezone)
         dt_biz = dt.astimezone(biz_tz)
