@@ -554,7 +554,11 @@ async def book(req: Request):
     if not link:
         raise HTTPException(500, {"error": "Could not generate confirmation link."})
 
-    return {"confirmation_link": link}
+    return {
+    "confirmation_link": link,
+    "booking_status": "complete",
+    "reset_history": True  # Optional, signals the frontend to clear chat history
+  }
 
 @app.get("/availability/{client_id}")
 def availability(client_id: str, date: str = Query(...), token: str = Query("")):

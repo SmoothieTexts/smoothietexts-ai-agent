@@ -509,13 +509,18 @@ if (!res.ok) {
 }
 
 
-    const { confirmation_link } = await res.json();
-    botReply(`✅ Appointment booked!<br>
-      <a href="${confirmation_link}" target="_blank">View details</a><br>
-      You'll receive a confirmation email.`);
-    bookingInProgress = false;
-    insertQuickOptions();
-    insertRatingWidget();
+const { confirmation_link, booking_status, reset_history } = await res.json();
+botReply(`✅ Appointment booked!<br>
+  <a href="${confirmation_link}" target="_blank">View details</a><br>
+  You'll receive a confirmation email.`);
+bookingInProgress = false;
+bookingState = { inProgress: false, date: null, time: null }; // <-- RESET THIS TOO!
+if (reset_history) conversationHistory = [];
+userInput.disabled = false;
+sendBtn.disabled = false;
+insertQuickOptions();
+insertRatingWidget();
+setTimeout(() => userInput.focus(), 0);
   } catch (error) {
     botReply("⚠️ Couldn’t complete booking. Please try again.", true);
     bookingInProgress = false;
@@ -667,8 +672,13 @@ if (leadSubmitted) {
   // Only trigger booking if user shows booking intent!
   if (/\b(book|schedule|appointment|meeting)\b/i.test(txt)) {
     bookingState.inProgress = true;
+    bookingInProgress = true;
     return startBookingFlow();
   }
+  // If bookingState was left on accidentally, reset it!
+  bookingState.inProgress = false;
+  bookingInProgress = false;
+
     // Handoff to human agent if user requests it
     if (/human|agent|real person|support|help/i.test(txt)) {
       botReply(config.handoff?.intro || "Connecting you to a human agent...", false);
