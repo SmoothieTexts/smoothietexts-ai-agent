@@ -59,9 +59,14 @@ app.add_middleware(
 # ─── Core Helpers ─────────────────────────────────────────────────────────────
 def fetch_config(client_id: str) -> dict:
     try:
-        r = requests.get(f"{CONFIG_BASE}/{client_id}.json", timeout=2)
+        url = f"{CONFIG_BASE}/{client_id}.json"
+        print(f"[fetch_config] FETCHING: {url}")
+        r = requests.get(url, timeout=2)
+        print("[fetch_config] STATUS:", r.status_code)
+        print("[fetch_config] RESPONSE:", r.text[:250]) # first 250 chars for brevity
         return r.json() if r.ok else {}
-    except:
+    except Exception as ex:
+        print("[fetch_config] ERROR:", ex)
         return {}
 
 def is_within_available_hours(dt: datetime.datetime, config: dict) -> bool:
