@@ -513,14 +513,16 @@ const { confirmation_link, booking_status, reset_history } = await res.json();
 botReply(`✅ Appointment booked!<br>
   <a href="${confirmation_link}" target="_blank">View details</a><br>
   You'll receive a confirmation email.`);
+// After successful booking
 bookingInProgress = false;
-bookingState = { inProgress: false, date: null, time: null }; // <-- RESET THIS TOO!
+bookingState = { inProgress: false, date: null, time: null };
 if (reset_history) conversationHistory = [];
 userInput.disabled = false;
 sendBtn.disabled = false;
 insertQuickOptions();
 insertRatingWidget();
 setTimeout(() => userInput.focus(), 0);
+console.log('[Booking] Done. Booking state reset. Ready for main chat.');
   } catch (error) {
     botReply("⚠️ Couldn’t complete booking. Please try again.", true);
     bookingInProgress = false;
@@ -600,6 +602,8 @@ async function showTimePicker(slotMap, userTimezone, businessTimezone) {
 
 async function handleInput() {
   const txt = userInput.value.trim();
+  console.log("Input received:", txt, "bookingInProgress:", bookingInProgress);
+
   if (!txt) return;
   // 🚦 Disable input/button to prevent double submit
   sendBtn.disabled = true;
@@ -608,24 +612,28 @@ async function handleInput() {
   userInput.value = "";
 
   // <--- ADD THIS
-  if (bookingInProgress) {
-    if (/start over/i.test(txt)) {
-      bookingInProgress = false;
-      resetBookingState();
-      await sendMessage("Booking cancelled.");
-  bookingState = { inProgress: false, date: null, time: null };
-  userInput.disabled = false;
-  sendBtn.disabled = false;
-  insertQuickOptions();
-  setTimeout(() => userInput.focus(), 0);
-  return;
-    }
-    if (/continue/i.test(txt)) {
-      return await startBookingFlow();
-    }
-    // For any other input, continue booking
+if (bookingInProgress) {
+  // The only things we allow during booking are booking-cancellation/continue or the next expected answer (yes/no, purpose, etc)
+  // To avoid infinite loop, after booking is completed/cancelled, bookingInProgress must be false and all future inputs go to normal chat
+
+  // For booking cancellation
+  if (/start over/i.test(txt) || /cancel/i.test(txt) || /exit/i.test(txt)) {
+    bookingInProgress = false;
+    resetBookingState();
+    await sendMessage("Booking cancelled.");
+    insertQuickOptions();
+    setTimeout(() => userInput.focus(), 0);
+    return;
+  }
+  // For continue, only allow if we are actually in a paused state (optional)
+  if (/continue/i.test(txt)) {
     return await startBookingFlow();
   }
+  // Otherwise, if booking is still ongoing, keep flowing
+  // (startBookingFlow should manage all intermediate prompts and should cleanly set bookingInProgress=false on exit)
+  return await startBookingFlow();
+}
+
   // <--- END ADDITION
 
   // ⬇️ Reset flow if user types "start over"
