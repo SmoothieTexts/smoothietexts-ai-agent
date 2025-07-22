@@ -404,14 +404,15 @@ async function startBookingFlow() {
   // STEP 1: User picks a date
   const pickedDate = await showDatePicker(config);
   if (!pickedDate) {
-    botReply("Booking cancelled.");
-  bookingInProgress = false;
-  bookingState = { inProgress: false, date: null, time: null };
-  userInput.disabled = false;
-  sendBtn.disabled = false;
-  insertQuickOptions();
-  setTimeout(() => userInput.focus(), 0);
-  return;
+botReply("Booking cancelled.");
+bookingInProgress = false;
+bookingState.inProgress = false;
+bookingState = { inProgress: false, date: null, time: null };
+userInput.disabled = false;
+sendBtn.disabled = false;
+insertQuickOptions();
+setTimeout(() => userInput.focus(), 0);
+return;
   }
 
   // STEP 2: Fetch available slots for that day from backend (all in UTC ISO)
@@ -434,14 +435,15 @@ async function startBookingFlow() {
   botReply(`Available times for ${pickedDate.toDateString()}:`);
 const pickedSlot = await showTimePicker(slotMap, userTimezone, businessTimezone);
 if (!pickedSlot) {
-  botReply("Booking cancelled.");
-  bookingInProgress = false;
-  bookingState = { inProgress: false, date: null, time: null };
-  userInput.disabled = false;
-  sendBtn.disabled = false;
-  insertQuickOptions();
-  setTimeout(() => userInput.focus(), 0);
-  return;
+botReply("Booking cancelled.");
+bookingInProgress = false;
+bookingState.inProgress = false;
+bookingState = { inProgress: false, date: null, time: null };
+userInput.disabled = false;
+sendBtn.disabled = false;
+insertQuickOptions();
+setTimeout(() => userInput.focus(), 0);
+return;
 }
 
   // STEP 4: Confirm booking with both timezones shown
@@ -457,14 +459,15 @@ if (!pickedSlot) {
   enableInput();
   const confirm = await waitForUserInput();
   if (!/^y(es)?$/i.test(confirm)) {
-    botReply("Booking cancelled.");
-  bookingInProgress = false;
-  bookingState = { inProgress: false, date: null, time: null };
-  userInput.disabled = false;
-  sendBtn.disabled = false;
-  insertQuickOptions();
-  setTimeout(() => userInput.focus(), 0);
-  return;
+botReply("Booking cancelled.");
+bookingInProgress = false;
+bookingState.inProgress = false;
+bookingState = { inProgress: false, date: null, time: null };
+userInput.disabled = false;
+sendBtn.disabled = false;
+insertQuickOptions();
+setTimeout(() => userInput.focus(), 0);
+return;
   }
 
   // STEP 5: Ask for meeting purpose
@@ -513,8 +516,8 @@ const { confirmation_link, booking_status, reset_history } = await res.json();
 botReply(`✅ Appointment booked!<br>
   <a href="${confirmation_link}" target="_blank">View details</a><br>
   You'll receive a confirmation email.`);
-// After successful booking
 bookingInProgress = false;
+bookingState.inProgress = false;
 bookingState = { inProgress: false, date: null, time: null };
 if (reset_history) conversationHistory = [];
 userInput.disabled = false;
@@ -613,26 +616,32 @@ async function handleInput() {
 
   // <--- ADD THIS
 if (bookingInProgress) {
-  // The only things we allow during booking are booking-cancellation/continue or the next expected answer (yes/no, purpose, etc)
-  // To avoid infinite loop, after booking is completed/cancelled, bookingInProgress must be false and all future inputs go to normal chat
-
-  // For booking cancellation
-  if (/start over/i.test(txt) || /cancel/i.test(txt) || /exit/i.test(txt)) {
+  // If, for any reason, the booking state is not truly active, force exit
+  if (!bookingState.inProgress) {
     bookingInProgress = false;
+    resetBookingState();
+    insertQuickOptions();
+    setTimeout(() => userInput.focus(), 0);
+    return;
+  }
+  // Cancel triggers
+  if (/start over|cancel|exit/i.test(txt)) {
+    bookingInProgress = false;
+    bookingState.inProgress = false;
     resetBookingState();
     await sendMessage("Booking cancelled.");
     insertQuickOptions();
     setTimeout(() => userInput.focus(), 0);
     return;
   }
-  // For continue, only allow if we are actually in a paused state (optional)
+  // For continue
   if (/continue/i.test(txt)) {
     return await startBookingFlow();
   }
-  // Otherwise, if booking is still ongoing, keep flowing
-  // (startBookingFlow should manage all intermediate prompts and should cleanly set bookingInProgress=false on exit)
+  // For all else, keep booking
   return await startBookingFlow();
 }
+
 
   // <--- END ADDITION
 
@@ -677,8 +686,11 @@ if (bookingInProgress) {
 
   // --- Main logic after lead is captured ---
 if (leadSubmitted) {
-  // Only trigger booking if user shows booking intent!
-  if (/\b(book|schedule|appointment|meeting)\b/i.test(txt)) {
+  // Only trigger booking if user shows booking intent and no booking is already in progress!
+  if (
+    /\b(book|schedule|appointment|meeting)\b/i.test(txt) &&
+    !bookingInProgress && !bookingState.inProgress
+  ) {
     bookingState.inProgress = true;
     bookingInProgress = true;
     return startBookingFlow();
