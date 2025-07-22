@@ -355,7 +355,7 @@ async def book(req: Request):
     if not cfg or not cfg.get("availableHours"):
         raise HTTPException(500, {"error": "Booking config missing or not loaded for client: " + cid})
 
-    # Only now parse dt...
+    # --- Always parse dt and related values FIRST ---
     try:
         import pytz
         dt = parser.isoparse(dt_str)
@@ -371,6 +371,11 @@ async def book(req: Request):
 
     day_name = dt_biz.strftime("%A").lower()
 
+    # --- NOW define provider after config is loaded and time is parsed ---
+    provider = p.get("bookingProvider") or cfg.get("bookingProvider")
+    if not provider:
+        raise HTTPException(400, {"error": "No booking provider configured."})
+
     # Logging (keep for debug!)
     print(f"---- BOOKING DEBUG ----")
     print(f"Incoming datetime string: {dt_str}")
@@ -378,6 +383,7 @@ async def book(req: Request):
     print(f"Converted to BUSINESS timezone ({cfg_timezone}): {dt_biz}")
     print(f"Available hours for {day_name}: {cfg.get('availableHours', {}).get(day_name)}")
     print(f"Meeting duration: {cfg.get('meetingDuration', 40)} min")
+    print(f"Provider: {provider}")
     print(f"-----------------------")
 
     if not is_within_available_hours(dt_biz, cfg):
@@ -385,6 +391,8 @@ async def book(req: Request):
 
     duration_minutes = int(cfg.get("meetingDuration", 40))
     window_end = (dt + timedelta(minutes=duration_minutes)).isoformat()
+
+    link = ""  # <-- initialize so you don't get UnboundLocalError
 
     if provider == "google":
         creds, _ = get_google_credentials_from_env(cid)
@@ -458,10 +466,9 @@ async def book(req: Request):
         ).execute()
 
         link = created.get("conferenceData", {}).get("entryPoints", [{}])[0].get("uri", "")
-    if provider == "google" and not link:
-       # fallback to event.htmlLink if conference link is missing
-        link = created.get("htmlLink", "")
-
+        if not link:
+            # fallback to event.htmlLink if conference link is missing
+            link = created.get("htmlLink", "")
 
     elif provider == "acuity":
         prefix = cid.upper()
@@ -517,36 +524,35 @@ async def book(req: Request):
                     }
                 )
 
-    # -- Fix: Robust name splitting --
-    name_parts = (name or "").strip().split()
-    firstName = name_parts[0] if len(name_parts) > 0 else ""
-    lastName = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
+        # -- Fix: Robust name splitting --
+        name_parts = (name or "").strip().split()
+        firstName = name_parts[0] if len(name_parts) > 0 else ""
+        lastName = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
 
-    res = requests.post(
-        "https://acuityscheduling.com/api/v1/appointments",
-        auth=(acuity_user, acuity_key),
-        json={
-            "firstName": firstName,
-            "lastName": lastName,
-            "email": email,
-            "datetime": dt.isoformat(),
-            "appointmentTypeID": int(service_id),
-            "notes": purpose
-        }
-    )
-    if res.status_code >= 400:
-        raise HTTPException(
-            res.status_code,
-            {"error": f"Acuity error: {res.text}"}
+        res = requests.post(
+            "https://acuityscheduling.com/api/v1/appointments",
+            auth=(acuity_user, acuity_key),
+            json={
+                "firstName": firstName,
+                "lastName": lastName,
+                "email": email,
+                "datetime": dt.isoformat(),
+                "appointmentTypeID": int(service_id),
+                "notes": purpose
+            }
         )
-    link = res.json().get("confirmationPage")
+        if res.status_code >= 400:
+            raise HTTPException(
+                res.status_code,
+                {"error": f"Acuity error: {res.text}"}
+            )
+        link = res.json().get("confirmationPage")
 
-    # --- ADD THESE LINES BELOW ---
-    if provider not in ("google", "acuity"):
+    # --- If not google or acuity ---
+    else:
         raise HTTPException(400, {"error": f"Unsupported booking provider: {provider}"})
     if not link:
         raise HTTPException(500, {"error": "Could not generate confirmation link."})
-    # --- END OF ADDED BLOCK ---
 
     return {"confirmation_link": link}
 
