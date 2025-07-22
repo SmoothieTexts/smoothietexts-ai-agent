@@ -41,6 +41,8 @@ TABLE_LOG       = os.getenv("SUPABASE_TABLE_NAME_LOG") or "client_conversations"
 GOOGLE_CLIENT_ID     = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 
+CONFIG_CACHE = {}   # <-- ADD THIS LINE RIGHT HERE!
+
 if not all([SUPABASE_URL, SUPABASE_KEY, API_TOKEN, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET]):
     raise RuntimeError("❌ Missing one or more required environment variables.")
 
