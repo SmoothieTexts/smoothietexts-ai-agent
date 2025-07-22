@@ -446,7 +446,10 @@ async def book(req: Request):
                 "dateTime": window_end,
                 "timeZone": timezone
             },
-            "attendees": [{"email": email}],
+            "attendees": [
+                {"email": email},                              # The user booking the appointment
+                {"email": cfg.get("client_email")}              # The client (host) who should be notified
+            ],
             "conferenceData": {
                 "createRequest": {
                     "requestId": str(uuid4()),

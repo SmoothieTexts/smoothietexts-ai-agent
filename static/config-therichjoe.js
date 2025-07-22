@@ -16,6 +16,7 @@ window.__247CONVO_CONFIG__ = {
   quickOption3: "Book Appointment",
   token: "247convobot-2025",
   client_id: "therichjoe",
+  client_email: "jcajiboyejoseph@gmail.com",
   meetingDuration: "30",
   // === 1. Personalized Greetings ===
   greetingTextMorning: "Good morning!",
