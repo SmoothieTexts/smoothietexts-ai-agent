@@ -90,6 +90,9 @@ function getErrorMsg(err) {
   }
 
 
+function getEl(id) { return document.getElementById(id); }
+let bubble, tooltip, header, avatar, support, bubbleSound, replySound, chatBox, userInput, sendBtn, chatBadge;
+
   async function run() {
     const client_id = getClientID();
     const config = window.__247CONVO_CONFIG__ || await loadConfig(client_id);
@@ -107,18 +110,19 @@ const quickOption1 = t("quick_1");
 const quickOption2 = t("quick_2");
 const quickOption3 = t("quick_3");
 
-    const getEl       = id => document.getElementById(id);
-    const bubble      = getEl("chat-bubble");
-    const tooltip     = getEl("chat-bubble-msg");
-    const header      = getEl("headerBrand");
-    const avatar      = getEl("headerAvatar");
-    const support     = getEl("supportLink");
-    const bubbleSound = getEl("bubbleSound");
-    const replySound  = getEl("replySound");
-    const chatBox     = getEl("chat");
-    const userInput   = getEl("userInput");
-    const sendBtn     = getEl("sendBtn");
-    const chatBadge   = getEl("chat-badge");
+    // Assign global DOM references here:
+    bubble      = getEl("chat-bubble");
+    tooltip     = getEl("chat-bubble-msg");
+    header      = getEl("headerBrand");
+    avatar      = getEl("headerAvatar");
+    support     = getEl("supportLink");
+    bubbleSound = getEl("bubbleSound");
+    replySound  = getEl("replySound");
+    chatBox     = getEl("chat");
+    userInput   = getEl("userInput");
+    sendBtn     = getEl("sendBtn");
+    chatBadge   = getEl("chat-badge");
+
     if (!bubble || !tooltip || !chatBox || !userInput || !sendBtn) {
       alert("247Convo Chatbot: Missing critical HTML elements! Please check your widget markup and IDs.");
       return;
