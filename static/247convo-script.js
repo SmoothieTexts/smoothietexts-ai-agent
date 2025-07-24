@@ -897,7 +897,6 @@ const playOnce = () => {
 ["click", "scroll", "mousemove", "keydown"].forEach(ev =>
   window.addEventListener(ev, playOnce, { once: true })
 );
-  } // <--- CLOSES THE async function run() BLOCK
 
 function waitForFlatpickrThenRun() {
   if (typeof flatpickr !== "undefined") {
