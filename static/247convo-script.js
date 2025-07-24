@@ -89,20 +89,23 @@ function getErrorMsg(err) {
     return cancelPhrases.some(phrase => txtNorm.includes(phrase));
   }
 
+
   async function run() {
     const client_id = getClientID();
     const config = window.__247CONVO_CONFIG__ || await loadConfig(client_id);
-    const {
-      token = "",
-      chatbotName  = "247Convo Bot",
-      brandName    = "247Convo",
-      quickOption1 = "Book Appointment",
-      quickOption2 = "How do I integrate?",
-      quickOption3 = "Talk to a human",
-      supportUrl   = "#",
-      avatarUrl    = "",
-      bookingProvider = "zoom"
-    } = config;
+const {
+  token = "",
+  chatbotName  = "247Convo Bot",
+  brandName    = "247Convo",
+  supportUrl   = "#",
+  avatarUrl    = "",
+  bookingProvider = "zoom"
+} = config;
+
+// Quick options now use language pack:
+const quickOption1 = t("quick_1");
+const quickOption2 = t("quick_2");
+const quickOption3 = t("quick_3");
 
     const getEl       = id => document.getElementById(id);
     const bubble      = getEl("chat-bubble");
@@ -120,6 +123,47 @@ function getErrorMsg(err) {
       alert("247Convo Chatbot: Missing critical HTML elements! Please check your widget markup and IDs.");
       return;
     }
+
+    const langPack = config.lang_pack || {};
+    let LANG = "en"; // Default language
+
+    function t(key) {
+      return (langPack[LANG] && langPack[LANG][key]) ||
+             (langPack["en"] && langPack["en"][key]) ||
+             key;
+    }
+
+    // === Language Switcher (no inline CSS) ===
+    const langSelector = getEl("lang-select");
+    if (langSelector) {
+      // Populate options from langPack
+      Object.keys(langPack).forEach(code => {
+        const opt = document.createElement("option");
+        opt.value = code;
+        opt.innerText = code.toUpperCase(); // EN, FR, ES, etc
+        langSelector.appendChild(opt);
+      });
+      langSelector.value = LANG;
+      langSelector.onchange = function() {
+        LANG = this.value;
+        // Update static UI labels
+        if (header) header.innerText = `${brandName} Assistant`;
+        if (avatar && avatarUrl) avatar.style.backgroundImage = `url('${avatarUrl}')`;
+        if (support) {
+          support.href = supportUrl;
+          support.textContent = t("support_link");
+        }
+        if (tooltip) tooltip.innerText = t("bubble");
+        if (userInput) userInput.placeholder = t("input_placeholder");
+        if (sendBtn) sendBtn.textContent = t("send");
+        getEl("quickOpts")?.remove();
+        insertQuickOptions();
+        if (tooltip && !(getEl("chatPopup")?.classList.contains("open"))) {
+          tooltip.innerText = t("bubble");
+        }
+      };
+    }
+
 
     function shakeBubble() {
       bubble.classList.remove("bounce");
@@ -184,7 +228,7 @@ function getErrorMsg(err) {
       const div = document.createElement('div');
       div.id = "chatRatingWidget";
       div.style = "margin:1em 0;text-align:center;";
-      let html = `<div style="font-size:1.1em;margin-bottom:4px;">${config.ratingPrompt || "How would you rate this experience?"}</div>`;
+      let html = `<div style="font-size:1.1em;margin-bottom:4px;">${t("rating_prompt")}</div>`;
       for (let i = 1; i <= 5; i++) {
         html += `<button data-rate="${i}" style="font-size:2em;cursor:pointer;border:none;background:none;">⭐️</button>`;
       }
@@ -193,7 +237,7 @@ function getErrorMsg(err) {
       div.querySelectorAll('button[data-rate]').forEach(btn => {
         btn.onclick = async (e) => {
           const score = e.target.getAttribute("data-rate");
-          div.innerHTML = `${config.ratingThanks || "Thank you for your feedback!"}`;
+          div.innerHTML = t("rating_thanks");
           try {
             await fetchWithTimeout(`${API_BASE}/rating`, {
               method: "POST",
@@ -208,7 +252,7 @@ function getErrorMsg(err) {
             });
           } catch (err) {
             console.error("[insertRatingWidget] Rating error:", err);
-            botReply(`${config.ratingError || "⚠️ Couldn't send your rating."}`);
+            botReply(t("rating_error"));
             enableInput();
           }
         };
@@ -217,21 +261,22 @@ function getErrorMsg(err) {
     }
 
     function getPersonalizedGreeting() {
-      let greet = config.greetingTextMorning || "Good morning!";
-      const hour = new Date().getHours();
-      if (hour >= 12 && hour < 18) greet = config.greetingTextAfternoon || "Good afternoon!";
-      if (hour >= 18) greet = config.greetingTextEvening || "Good evening!";
+let greet = t("greeting");
+const hour = new Date().getHours();
+if (hour >= 12 && hour < 18) greet = t("greeting_afternoon");
+if (hour >= 18) greet = t("greeting_evening");
       if (userName) greet += ` ${userName}`;
       return greet;
     }
 
-    if (header) header.innerText = `${brandName} Assistant`;
-    if (avatar && avatarUrl) avatar.style.backgroundImage = `url('${avatarUrl}')`;
-    if (support) support.href = supportUrl;
-    if (tooltip) {
-      tooltip.innerText = config.bubbleMessage || `Need help? Ask ${chatbotName}.`;
+if (header) header.innerText = `${brandName} Assistant`;
+if (avatar && avatarUrl) avatar.style.backgroundImage = `url('${avatarUrl}')`;
+if (support) support.href = supportUrl;
+if (tooltip) tooltip.innerText = t("bubble");
+if (userInput) userInput.placeholder = t("input_placeholder");
+if (sendBtn) sendBtn.textContent = t("send");
+if (support) support.textContent = t("support_link");
     }
-
     setTimeout(() => {
       const popup = getEl("chatPopup");
       if (
@@ -239,9 +284,7 @@ function getErrorMsg(err) {
         popup && !popup.classList.contains("open") &&
         !window.__247CONVO_BUBBLE_MSG_SHOWN
       ) {
-        const provText = (config.proactive && config.proactive.bubble) ||
-          config.bubbleMessage ||
-          `Need help? Ask ${chatbotName}.`;
+        const provText = t("proactive_bubble");
         typewriterTooltip(provText);
         shakeBubble();
         pulseBubble(true);
@@ -258,9 +301,7 @@ function getErrorMsg(err) {
         popup && !popup.classList.contains("open") &&
         !window.__247CONVO_BUBBLE_MSG_EXIT_SHOWN
       ) {
-        const provText = (config.proactive && config.proactive.exitIntent) ||
-          config.bubbleMessage ||
-          `Need help? Ask ${chatbotName}.`;
+        const provText = t("proactive_exitIntent");
         typewriterTooltip(provText);
         shakeBubble();
         pulseBubble(true);
@@ -277,9 +318,7 @@ function getErrorMsg(err) {
         !window.__247CONVO_BUBBLE_MSG_SCROLL_SHOWN &&
         (window.scrollY / (document.body.scrollHeight - window.innerHeight)) > 0.6
       ) {
-        const provText = (config.proactive && config.proactive.scrollDepth) ||
-          config.bubbleMessage ||
-          `Need help? Ask ${chatbotName}.`;
+        const provText = t("proactive_scrollDepth");
         typewriterTooltip(provText);
         shakeBubble();
         pulseBubble(true);
@@ -319,18 +358,28 @@ function getErrorMsg(err) {
       setTimeout(() => userInput.focus(), 0);
     }
 
-    function insertQuickOptions() {
-      if (!chatBox) return;
-      getEl("quickOpts")?.remove();
-      chatBox.insertAdjacentHTML("beforeend", 
-        `<div class="quick-options" id="quickOpts">
-          <button onclick="quickAsk('${quickOption1}')">${quickOption1}</button>
-          <button onclick="quickAsk('${quickOption2}')">${quickOption2}</button>
-          <button onclick="quickAsk('${quickOption3}')">${quickOption3}</button>
-        </div>`
-      );
-      chatBox.scrollTop = chatBox.scrollHeight;
-    }
+function insertQuickOptions() {
+  if (!chatBox) return;
+  getEl("quickOpts")?.remove();
+
+  // Create the container
+  const div = document.createElement("div");
+  div.className = "quick-options";
+  div.id = "quickOpts";
+
+  // List of quick option texts
+  const quicks = [t("quick_1"), t("quick_2"), t("quick_3")];
+  quicks.forEach(q => {
+    const btn = document.createElement("button");
+    btn.textContent = q;
+    btn.type = "button";
+    btn.addEventListener("click", () => quickAsk(q)); // <--- Best Practice!
+    div.appendChild(btn);
+  });
+
+  chatBox.appendChild(div);
+  chatBox.scrollTop = chatBox.scrollHeight;
+}
 
 function waitForUserInput() {
   return new Promise(resolve => {
@@ -387,7 +436,7 @@ async function startBookingFlow() {
   bookingInProgress = true;
 
   if (!leadSubmitted) {
-    botReply("Before booking, may I have your name and email?");
+    botReply(t("book_lead_prompt") || "Before booking, may I have your name and email?");
     enableInput();
     return;
   }
@@ -396,15 +445,17 @@ async function startBookingFlow() {
   const businessTimezone = config.timezone || "UTC";
   const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-  botReply(
-    `All available times are shown in <b>your local timezone</b>: ${userTimezone}.<br>` +
-    `Business location timezone: <b>${businessTimezone}</b>.`
-  );
+botReply(
+  (t("book_timezones") || 
+    `All available times are shown in <b>your local timezone</b>: {userTZ}.<br>Business location timezone: <b>{bizTZ}</b>.`)
+    .replace("{userTZ}", userTimezone)
+    .replace("{bizTZ}", businessTimezone)
+);
 
   // STEP 1: User picks a date
   const pickedDate = await showDatePicker(config);
   if (!pickedDate) {
-botReply("Booking cancelled.");
+botReply(t("book_cancelled"));
 bookingInProgress = false;
 bookingState.inProgress = false;
 bookingState = { inProgress: false, date: null, time: null };
@@ -419,7 +470,7 @@ return;
   const isoDate = pickedDate.toISOString().split("T")[0];
   const slots = await getAvailableSlots(isoDate);
   if (!slots.length) {
-    botReply("No available slots for that date. Please pick another day.");
+    botReply(t("book_no_slots"));
     bookingInProgress = false;
     return startBookingFlow();
   }
@@ -432,10 +483,13 @@ return;
     raw: slotUTC
   }));
 
-  botReply(`Available times for ${pickedDate.toDateString()}:`);
+botReply(
+  (t("book_times_for_date") || "Available times for {date}:")
+    .replace("{date}", pickedDate.toLocaleDateString(undefined, {weekday:"long", year:"numeric", month:"short", day:"numeric"}))
+);
 const pickedSlot = await showTimePicker(slotMap, userTimezone, businessTimezone);
 if (!pickedSlot) {
-botReply("Booking cancelled.");
+botReply(t("book_cancelled"));
 bookingInProgress = false;
 bookingState.inProgress = false;
 bookingState = { inProgress: false, date: null, time: null };
@@ -449,17 +503,21 @@ return;
   // STEP 4: Confirm booking with both timezones shown
   const slotUserTZ = new Date(pickedSlot.utc).toLocaleString(undefined, { timeZone: userTimezone });
   const slotBizTZ = new Date(pickedSlot.utc).toLocaleString(undefined, { timeZone: businessTimezone });
-  botReply(
-    `Confirm booking:<br>
-    <b>${slotUserTZ} (your time: ${userTimezone})</b><br>
-    <b>${slotBizTZ} (business time: ${businessTimezone})</b><br>
-    Duration: ${config.meetingDuration || 40} min`
-  );
-  botReply("Proceed with this booking? (yes/no)");
+botReply(
+  (t("book_confirm_details") ||
+    "Confirm booking:<br><b>{userTime} (your time: {userTZ})</b><br><b>{bizTime} (business time: {bizTZ})</b><br>Duration: {duration} min"
+  )
+    .replace("{userTime}", slotUserTZ)
+    .replace("{userTZ}", userTimezone)
+    .replace("{bizTime}", slotBizTZ)
+    .replace("{bizTZ}", businessTimezone)
+    .replace("{duration}", config.meetingDuration || 40)
+);
+  botReply(t("book_confirm"));
   enableInput();
   const confirm = await waitForUserInput();
   if (!/^y(es)?$/i.test(confirm)) {
-botReply("Booking cancelled.");
+botReply(t("book_cancelled"));
 bookingInProgress = false;
 bookingState.inProgress = false;
 bookingState = { inProgress: false, date: null, time: null };
@@ -471,12 +529,12 @@ return;
   }
 
   // STEP 5: Ask for meeting purpose
-  botReply("What’s the purpose of this meeting?");
+  botReply(t("book_purpose"));
   enableInput();
   const purpose = await waitForUserInput();
 
   // STEP 6: Send booking request to backend
-  showMessage("Booking your appointment…", false, true);
+  showMessage(t("book_in_progress") || "Booking your appointment…", false, true);
 
   try {
     const res = await fetchWithTimeout(`${API_BASE}/book`, {
@@ -513,9 +571,10 @@ if (!res.ok) {
 
 
 const { confirmation_link, booking_status, reset_history } = await res.json();
-botReply(`✅ Appointment booked!<br>
-  <a href="${confirmation_link}" target="_blank">View details</a><br>
-  You'll receive a confirmation email.`);
+botReply(
+  (t("book_success") || "✅ Appointment booked!<br><a href=\"{link}\" target=\"_blank\">View details</a><br>You'll receive a confirmation email.")
+    .replace("{link}", confirmation_link)
+);
 bookingInProgress = false;
 bookingState.inProgress = false;
 bookingState = { inProgress: false, date: null, time: null };
@@ -527,7 +586,7 @@ insertRatingWidget();
 setTimeout(() => userInput.focus(), 0);
 console.log('[Booking] Done. Booking state reset. Ready for main chat.');
   } catch (error) {
-    botReply("⚠️ Couldn’t complete booking. Please try again.", true);
+    botReply(t("book_fail"), true);
     bookingInProgress = false;
     userInput.disabled = false;
     sendBtn.disabled = false;
@@ -539,11 +598,11 @@ async function showDatePicker(config) {
   return new Promise(resolve => {
     const wrapper = document.createElement("div");
     wrapper.style.margin = "1em 0";
-    wrapper.innerHTML = `
-      <label>Select a date:</label><br/>
-      <input type="text" id="manualDate" style="padding:5px;margin:5px 0;" autocomplete="off" placeholder="Click to select date 📅" readonly />
-      <div style="font-size:0.85em;color:#888;">(Only available dates can be selected. Use the calendar.)</div>
-    `;
+wrapper.innerHTML = `
+  <label>${t("select_date")}</label><br/>
+  <input type="text" id="manualDate" style="padding:5px;margin:5px 0;" autocomplete="off" placeholder="${t("date_placeholder")}" readonly />
+  <div style="font-size:0.85em;color:#888;">${t("date_helptext")}</div>
+`;
     chatBox.appendChild(wrapper);
     chatBox.scrollTop = chatBox.scrollHeight;
 
@@ -577,7 +636,7 @@ async function showTimePicker(slotMap, userTimezone, businessTimezone) {
   return new Promise(resolve => {
     const wrapper = document.createElement("div");
     wrapper.style.margin = "1em 0";
-    wrapper.innerHTML = `<p>Pick a time (all shown in your local timezone: <b>${userTimezone}</b>):</p>`;
+    wrapper.innerHTML = `<p>${t("pick_time")}</p>`;
     slotMap.forEach(slot => {
       const btn = document.createElement("button");
       btn.textContent = slot.userLocal;
@@ -589,7 +648,7 @@ async function showTimePicker(slotMap, userTimezone, businessTimezone) {
       wrapper.appendChild(btn);
     });
     const cancelBtn = document.createElement("button");
-    cancelBtn.textContent = "Cancel";
+    cancelBtn.textContent = t("cancel");
     cancelBtn.style = "margin-left:12px;";
     cancelBtn.onclick = () => {
       wrapper.remove();
@@ -648,7 +707,7 @@ if (bookingInProgress) {
   // ⬇️ Reset flow if user types "start over"
   if (/start over/i.test(txt)) {
     resetBookingState();
-    await sendMessage("Booking cancelled."); // sync to backend/context
+    await sendMessage(t("book_cancelled")); // sync to backend/context
   bookingInProgress = false;
   bookingState = { inProgress: false, date: null, time: null };
   userInput.disabled = false;
@@ -666,11 +725,11 @@ if (bookingInProgress) {
       collecting = "email";
       userInput.disabled = false;
       sendBtn.disabled = false;
-      return botReply(`${getPersonalizedGreeting()} ${config.askEmail || "Now, what’s your email?"}`);
+      return botReply(`${getPersonalizedGreeting()} ${t("ask_email")}`);
     } else if (collecting === "email") {
       userEmail = txt.slice(0, 100);
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userEmail)) {
-        botReply("❌ Please enter a valid email address.", true);
+        botReply(t("error_email"), true);
         userInput.disabled = false;
         sendBtn.disabled = false;
         return;
@@ -679,7 +738,11 @@ if (bookingInProgress) {
       collecting = "done";
       userInput.disabled = false;
       sendBtn.disabled = false;
-      botReply(`✅ Thanks, ${userName}! I’m ${chatbotName}. How can I help?`);
+      botReply(
+  (t("lead_thanks") || "✅ Thanks, {name}! I’m {bot}. How can I help?")
+    .replace("{name}", userName)
+    .replace("{bot}", chatbotName)
+);
       return insertQuickOptions();
     }
   }
@@ -701,8 +764,8 @@ if (leadSubmitted) {
 
     // Handoff to human agent if user requests it
     if (/human|agent|real person|support|help/i.test(txt)) {
-      botReply(config.handoff?.intro || "Connecting you to a human agent...", false);
-      if (config.handoff?.whatsapp) showMessage(config.handoff.whatsapp, false);
+      botReply(t("handoff_intro"), false);
+      if (t("handoff_whatsapp")) showMessage(t("handoff_whatsapp"), false);
       userInput.disabled = false;
       sendBtn.disabled = false;
       return;
@@ -748,12 +811,13 @@ async function sendMessage(txt) {
         client_id,
         history: conversationHistory,
         booking: bookingState,
+        lang: LANG // <-- add this line!
       }),
     });
     const wrapper = getEl(`${id}-wrapper`);
     if (wrapper) wrapper.remove();
     if (!res.ok) {
-      botReply("⚠️ Server error. Please try again.", false);
+      botReply(t("error_generic"), false);
       enableInput();
       return;
     }
@@ -761,14 +825,14 @@ async function sendMessage(txt) {
     try {
       data = await res.json();
     } catch (err) {
-      botReply("⚠️ Server error. Bad JSON from backend.", false);
+      botReply(t("error_generic"), false);
       enableInput();
       return;
     }
     const safeAnswer =
       typeof data.answer === "string"
         ? linkify(stripTags(data.answer))
-        : (data.answer ? JSON.stringify(data.answer, null, 2) : "No response from bot.");
+        : (data.answer ? JSON.stringify(data.answer, null, 2) : t("no_response") || "No response from bot.");
     showMessage(`${chatbotName}: ${safeAnswer}`, false);
     updateConversationHistory(txt, safeAnswer);
     if (replySound) replySound.play();

@@ -145,7 +145,7 @@ def rate_limited(ip: str) -> bool:
     bucket.append(now_ts)
     return False
 
-def answer(user_q: str, client_id: str, cfg: dict, oa: OpenAI, history: list = None, booking: dict = None) -> str:
+def answer(user_q: str, client_id: str, cfg: dict, oa: OpenAI, history: list = None, booking: dict = None, lang: str = "en") -> str:
     # Cancellation handling block - always keep this as the FIRST thing!
     if booking and isinstance(booking, dict):
         user_cancel_phrases = [
@@ -200,7 +200,7 @@ def answer(user_q: str, client_id: str, cfg: dict, oa: OpenAI, history: list = N
 
     if score >= SIM_THRESHOLD:
         # If knowledge base match, just answer with KB context
-        prompt = f"You are {cfg.get('chatbotName','Chatbot')}. Answer using ONLY this knowledge:\n\n{ctx}\n\nQ: {user_q}\nA:"
+        prompt = f"Always reply ONLY in {lang}. You are {cfg.get('chatbotName','Chatbot')}. Answer using ONLY this knowledge:\n\n{ctx}\n\nQ: {user_q}\nA:"
         res = oa.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": prompt}]
@@ -210,7 +210,7 @@ def answer(user_q: str, client_id: str, cfg: dict, oa: OpenAI, history: list = N
         res = oa.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": f"You are {cfg.get('chatbotName','Chatbot')}."},
+                {"role": "system", "content": f"Always reply ONLY in {lang}. You are {cfg.get('chatbotName','Chatbot')}."},
                 {"role": "user",   "content": user_q}
             ]
         )
@@ -225,7 +225,7 @@ def answer(user_q: str, client_id: str, cfg: dict, oa: OpenAI, history: list = N
             f"{booking.get('time', 'unknown time')}. Respond accordingly.\n"
         )
 
-    prompt = booking_context  # <<-- Always at the top of the prompt!
+    prompt = f"Always reply ONLY in {lang}.\n" + booking_context
     for turn in (history[-5:] if len(history) > 5 else history):
         user = turn.get("user", "")
         bot  = turn.get("bot", "")
@@ -316,11 +316,12 @@ async def chat(req: Request):
     # NEW: Get optional conversation history
     history = p.get("history", [])   # Array of {user, bot} dicts
     booking = p.get("booking", {})   # <-- Add this line to receive booking info
+    lang = p.get("lang", "en")       # <-- ADD THIS LINE!
 
     cfg = fetch_config(cid)
     oa  = get_openai_client(cid)
     try:
-        ans = answer(q, cid, cfg, oa, history, booking)
+        ans = answer(q, cid, cfg, oa, history, booking, lang=lang)   # <-- PASS lang HERE!
         return {"answer": ans}
     except Exception:
         traceback.print_exc()

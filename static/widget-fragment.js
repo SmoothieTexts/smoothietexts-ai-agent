@@ -5,7 +5,8 @@
   document.body.insertAdjacentHTML('beforeend', `
     <!-- 1. Chat Bubble Shell -->
     <div id="chat-bubble">💬
-  <span id="chat-badge"></span></div>
+      <span id="chat-badge"></span>
+    </div>
     <div id="chat-bubble-msg">Need help? Ask us anything.</div>
 
     <!-- 2. Chat Popup Container -->
@@ -13,6 +14,12 @@
       <div class="chat-header">
         <div class="header-avatar" id="headerAvatar"></div>
         <span id="headerBrand">Assistant</span>
+        <!-- Language dropdown (added here, right after brand name) -->
+        <select id="lang-select" style="margin-left:10px;">
+          <option value="en">🇬🇧 English</option>
+          <option value="fr">🇫🇷 Français</option>
+          <option value="es">🇪🇸 Español</option>
+        </select>
         <button class="close-btn" id="closeBtn">➖</button>
       </div>
 
