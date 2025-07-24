@@ -91,25 +91,21 @@ body {
 .chat-header {
   background: #F6F6F7;
   color: #000000;
-  padding: 1rem 2.5rem 1rem 1rem;
+  padding: 1rem 2.2rem 1rem 1rem;
   font-weight: bold;
   font-size: 1rem;
   display: flex;
-  justify-content: center;
   align-items: center;
-  position: relative;
+  justify-content: space-between; /* makes sure left and right edge items don't overlap */
   border-top-left-radius: 16px;
   border-top-right-radius: 16px;
-  gap: 8px;
+  gap: 10px;
+  position: relative;
 }
 
 .close-btn {
-  position: absolute;
-  padding: 4px;
-  top: 50%;
-  right: 12px;
-  transform: translateY(-50%);
-  font-size: 14px;
+  padding: 4px 12px;
+  font-size: 18px;
   border: none;
   color: #000000;
   cursor: pointer;
@@ -464,10 +460,6 @@ body {
 }
 
 #lang-select {
-  position: absolute;
-  top: 10px;
-  right: 16px;
-  z-index: 10;
   border-radius: 8px;
   border: 1px solid #ddd;
   background: #fff;

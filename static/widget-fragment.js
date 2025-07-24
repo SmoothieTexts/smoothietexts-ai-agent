@@ -15,11 +15,7 @@
         <div class="header-avatar" id="headerAvatar"></div>
         <span id="headerBrand">Assistant</span>
         <!-- Language dropdown (added here, right after brand name) -->
-        <select id="lang-select" style="margin-left:10px;">
-          <option value="en">🇬🇧 English</option>
-          <option value="fr">🇫🇷 Français</option>
-          <option value="es">🇪🇸 Español</option>
-        </select>
+        <select id="lang-select"></select>
         <button class="close-btn" id="closeBtn">➖</button>
       </div>
 

@@ -115,34 +115,42 @@
     const quickOption2 = t("quick_2");
     const quickOption3 = t("quick_3");
 
-    // === Language Switcher (no inline CSS) ===
-    const langSelector = getEl("lang-select");
-    if (langSelector) {
-      Object.keys(langPack).forEach(code => {
-        const opt = document.createElement("option");
-        opt.value = code;
-        opt.innerText = code.toUpperCase();
-        langSelector.appendChild(opt);
-      });
-      langSelector.value = LANG;
-      langSelector.onchange = function() {
-        LANG = this.value;
-        if (header) header.innerText = `${brandName} Assistant`;
-        if (avatar && avatarUrl) avatar.style.backgroundImage = `url('${avatarUrl}')`;
-        if (support) {
-          support.href = supportUrl;
-          support.textContent = t("support_link");
-        }
-        if (tooltip) tooltip.innerText = t("bubble");
-        if (userInput) userInput.placeholder = t("input_placeholder");
-        if (sendBtn) sendBtn.textContent = t("send");
-        getEl("quickOpts")?.remove();
-        insertQuickOptions();
-        if (tooltip && !(getEl("chatPopup")?.classList.contains("open"))) {
-          tooltip.innerText = t("bubble");
-        }
-      };
+const langSelector = getEl("lang-select");
+if (langSelector) {
+  Object.keys(langPack).forEach(code => {
+    const opt = document.createElement("option");
+    opt.value = code;
+    // Use flag and full label for user-friendliness
+    if (code === "en") {
+      opt.innerText = "🇺🇸 English";
+    } else if (code === "fr") {
+      opt.innerText = "🇫🇷 Français";
+    } else if (code === "es") {
+      opt.innerText = "🇪🇸 Español";
+    } else {
+      opt.innerText = code.toUpperCase();
     }
+    langSelector.appendChild(opt);
+  });
+  langSelector.value = LANG;
+  langSelector.onchange = function() {
+    LANG = this.value;
+    if (header) header.innerText = `${brandName} Assistant`;
+    if (avatar && avatarUrl) avatar.style.backgroundImage = `url('${avatarUrl}')`;
+    if (support) {
+      support.href = supportUrl;
+      support.textContent = t("support_link");
+    }
+    if (tooltip) tooltip.innerText = t("bubble");
+    if (userInput) userInput.placeholder = t("input_placeholder");
+    if (sendBtn) sendBtn.textContent = t("send");
+    getEl("quickOpts")?.remove();
+    insertQuickOptions();
+    if (tooltip && !(getEl("chatPopup")?.classList.contains("open"))) {
+      tooltip.innerText = t("bubble");
+    }
+  };
+}
 
     function shakeBubble() {
       bubble.classList.remove("bounce");
