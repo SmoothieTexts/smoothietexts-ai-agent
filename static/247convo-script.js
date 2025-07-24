@@ -105,11 +105,6 @@ const {
   bookingProvider = "zoom"
 } = config;
 
-// Quick options now use language pack:
-const quickOption1 = t("quick_1");
-const quickOption2 = t("quick_2");
-const quickOption3 = t("quick_3");
-
     // Assign global DOM references here:
     bubble      = getEl("chat-bubble");
     tooltip     = getEl("chat-bubble-msg");
@@ -136,6 +131,11 @@ const quickOption3 = t("quick_3");
              (langPack["en"] && langPack["en"][key]) ||
              key;
     }
+
+// Quick options now use language pack:
+const quickOption1 = t("quick_1");
+const quickOption2 = t("quick_2");
+const quickOption3 = t("quick_3");
 
     // === Language Switcher (no inline CSS) ===
     const langSelector = getEl("lang-select");
