@@ -399,7 +399,7 @@ if (langSelector) {
     }
 
     function fetchWithTimeout(resource, options = {}) {
-      const { timeout = 15000 } = options;
+      const { timeout = 35000 } = options;
       return Promise.race([
         fetch(resource, options),
         new Promise((_, reject) =>
