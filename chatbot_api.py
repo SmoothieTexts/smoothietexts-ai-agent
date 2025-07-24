@@ -65,7 +65,7 @@ def fetch_config(client_id: str) -> dict:
     try:
         url = f"{CONFIG_BASE}/{client_id}.json"
         print(f"[fetch_config] FETCHING: {url}")
-        r = requests.get(url, timeout=15)
+        r = requests.get(url, timeout=35)
         print("[fetch_config] STATUS:", r.status_code)
         print("[fetch_config] RESPONSE:", r.text[:250])
         cfg = r.json() if r.ok else {}
