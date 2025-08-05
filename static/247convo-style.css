@@ -256,9 +256,10 @@ body {
   transition: background 0.2s, outline 0.2s;
 }
 
-.input-section button svg {
+.input-section button img {
   display: block;
-  fill: currentColor;        /* inherits the button color */
+  width: 24px;
+  height: 24px;
 }
 
 .input-section button:hover,
