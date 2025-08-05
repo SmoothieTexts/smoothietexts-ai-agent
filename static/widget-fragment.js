@@ -37,7 +37,16 @@
             id="userInput"
             placeholder="Type your message…"
           />
-          <button id="sendBtn">Send</button>
+  <button id="sendBtn" aria-label="Send">
+    <svg role="img" aria-hidden="true"
+         xmlns="http://www.w3.org/2000/svg"
+         width="24" height="24"
+         viewBox="0 0 24 24"
+         fill="currentColor">
+      <title>Send</title>
+      <path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/>
+    </svg>
+  </button>
         </div>
       </div>
 

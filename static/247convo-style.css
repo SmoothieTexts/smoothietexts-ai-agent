@@ -256,6 +256,11 @@ body {
   transition: background 0.2s, outline 0.2s;
 }
 
+.input-section button svg {
+  display: block;
+  fill: currentColor;        /* inherits the button color */
+}
+
 .input-section button:hover,
 .input-section button:focus {
   background: #660066;
