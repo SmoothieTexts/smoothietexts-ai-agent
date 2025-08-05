@@ -11,7 +11,8 @@
 // Helper to build API URLs
 
 // Smart name extractor for EN/FR/ES prefixes
-  function extractName(text) {
+function extractName(text) {
+  const patterns = [
     // English
     /my name is\s+([^\.,!]+)/i,
     /\bname is\s+([^\.,!]+)/i,
