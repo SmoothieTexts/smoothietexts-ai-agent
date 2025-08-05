@@ -7,7 +7,54 @@
   const BASE_CONFIG_URL  = "https://two47ctest.onrender.com/static";
   const API_BASE         = "https://two47cbackend.onrender.com";
 
-  // Helper to build API URLs
+  
+// Helper to build API URLs
+
+// Smart name extractor for EN/FR/ES prefixes
+  function extractName(text) {
+    // English
+    /my name is\s+([^\.,!]+)/i,
+    /\bname is\s+([^\.,!]+)/i,
+    /\bi am\s+([^\.,!]+)/i,
+    /\bi’m\s+([^\.,!]+)/i,
+    /\bthis is\s+([^\.,!]+)/i,
+    /you can call me\s+([^\.,!]+)/i,
+    /they call me\s+([^\.,!]+)/i,
+    /\bcall me\s+([^\.,!]+)/i,
+    /name:\s*([^\.,!]+)/i,
+    // French
+    /mon nom est\s+([^\.,!]+)/i,
+    /je m'appelle\s+([^\.,!]+)/i,
+    /je suis\s+([^\.,!]+)/i,
+    /vous pouvez m'appeler\s+([^\.,!]+)/i,
+    /appelez-moi\s+([^\.,!]+)/i,
+    /on m'appelle\s+([^\.,!]+)/i,
+    /prénom\s+([^\.,!]+)/i,
+    /nom:\s*([^\.,!]+)/i,
+    // Spanish
+    /mi nombre es\s+([^\.,!]+)/i,
+    /me llamo\s+([^\.,!]+)/i,
+    /\bsoy\s+([^\.,!]+)/i,
+    /puedes llamarme\s+([^\.,!]+)/i,
+    /llámame\s+([^\.,!]+)/i,
+    /nombre:\s*([^\.,!]+)/i,
+  ];
+    for (const pat of patterns) {
+      const m = text.match(pat);
+      if (m && m[1]) return m[1].trim();
+    }
+    // Fallback: first two words
+    const parts = text.trim().split(/\s+/);
+    return parts.slice(0, Math.min(2, parts.length)).join(' ');
+  }
+
+  // Smart email extractor (pulls first valid address)
+  function extractEmail(text) {
+    const emailRegex = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/;
+    const m = text.match(emailRegex);
+    return m ? m[0].trim() : text.trim();
+  }
+
   function apiUrl(path, params = {}, token = "") {
     const qp = Object.entries({ ...params, token }).map(
       ([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`
@@ -18,6 +65,7 @@
   function linkify(text) {
     return text.replace(/(https?:\/\/[^\s]+)/g, url => `<a href="${url}" target="_blank" rel="noopener">${url}</a>`);
   }
+
 
   function getClientID() {
     if (window.__247CONVO_CONFIG__?.client_id) return window.__247CONVO_CONFIG__.client_id;
@@ -278,7 +326,7 @@ if (langSelector) {
         showBadge(1);
         window.__247CONVO_BUBBLE_MSG_SHOWN = true;
       }
-    }, 35000);
+    }, 60000);
 
     document.addEventListener("mouseleave", e => {
       const popup = getEl("chatPopup");
@@ -678,25 +726,28 @@ if (langSelector) {
         return;
       }
 
+      // **Lead capture: Name then Email**
       if (!leadSubmitted) {
         if (collecting === "name") {
-          userName = txt.slice(0, 100);
+          // Extract and store only the person’s name
+          const rawName = extractName(txt);
+          userName = rawName.slice(0, 100);
           collecting = "email";
-          userInput.disabled = false;
-          sendBtn.disabled = false;
+          enableInput();
           return botReply(`${getPersonalizedGreeting()} ${t("ask_email")}`);
         } else if (collecting === "email") {
-          userEmail = txt.slice(0, 100);
+          // Extract and store only the email address
+          const rawEmail = extractEmail(txt);
+          userEmail = rawEmail.slice(0, 100);
+          // Validate email format
           if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userEmail)) {
             botReply(t("error_email"), true);
-            userInput.disabled = false;
-            sendBtn.disabled = false;
+            enableInput();
             return;
           }
           leadSubmitted = true;
           collecting = "done";
-          userInput.disabled = false;
-          sendBtn.disabled = false;
+          enableInput();
           botReply(
             (t("lead_thanks") || "✅ Thanks, {name}! I’m {bot}. How can I help?")
               .replace("{name}", userName)
