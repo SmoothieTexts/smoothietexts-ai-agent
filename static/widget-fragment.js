@@ -39,7 +39,7 @@
           />
   <button id="sendBtn" aria-label="Send">
     <img
-      src="https://two47convo.onrender.com/static/send-paperplane.svg"
+      src="https://two47ctest.onrender.com/static/send-paperplane.svg"
       alt=""
       role="presentation"
     />
@@ -50,12 +50,12 @@
       <!-- 3. Notification Sounds -->
       <audio
         id="bubbleSound"
-        src="https://two47convo.onrender.com/static/chatopen.wav"
+        src="https://two47ctest.onrender.com/static/chatopen.wav"
         preload="auto"
       ></audio>
       <audio
         id="replySound"
-        src="https://two47convo.onrender.com/static/response.wav"
+        src="https://two47ctest.onrender.com/static/response.wav"
         preload="auto"
       ></audio>
     </div>
