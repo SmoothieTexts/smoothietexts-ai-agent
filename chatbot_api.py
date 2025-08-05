@@ -28,6 +28,9 @@ from google.auth.transport.requests import Request as GoogleRequest
 from googleapiclient.discovery import build
 from dateutil import parser
 from datetime import timedelta
+from requests.adapters import HTTPAdapter
+from requests.exceptions import ReadTimeout, RequestException
+from urllib3.util.retry import Retry
 
 # ─── Load ENV ────────────────────────────────────────────────────────────────
 load_dotenv()
@@ -59,30 +62,62 @@ app.add_middleware(
 )
 
 # ─── Core Helpers ─────────────────────────────────────────────────────────────
+from requests.adapters import HTTPAdapter
+from requests.exceptions import ReadTimeout, RequestException
+from urllib3.util.retry import Retry
+
 def fetch_config(client_id: str) -> dict:
+    # Return cached config if available
     if client_id in CONFIG_CACHE:
         return CONFIG_CACHE[client_id]
+
+    url = f"{CONFIG_BASE}/{client_id}.json"
+    print(f"[fetch_config] FETCHING: {url}")
+
+    # Prepare a session with retry strategy
+    session = requests.Session()
+    retry_strategy = Retry(
+        total=3,                       # Retry up to 3 times
+        backoff_factor=1,              # Exponential backoff: 1s, 2s, 4s
+        status_forcelist=[500,502,503,504],
+        allowed_methods=["GET"]
+    )
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+
     try:
-        url = f"{CONFIG_BASE}/{client_id}.json"
-        print(f"[fetch_config] FETCHING: {url}")
-        r = requests.get(url, timeout=35)
-        print("[fetch_config] STATUS:", r.status_code)
-        print("[fetch_config] RESPONSE:", r.text[:250])
-        cfg = r.json() if r.ok else {}
-        if cfg:
-            CONFIG_CACHE[client_id] = cfg
-            return cfg
-    except Exception as ex:
+        # Fetch remote config with a shorter timeout
+        resp = session.get(url, timeout=20)
+        print("[fetch_config] STATUS:", resp.status_code)
+        print("[fetch_config] RESPONSE:", resp.text[:250])
+        resp.raise_for_status()
+
+        cfg = resp.json()
+        CONFIG_CACHE[client_id] = cfg
+        print(f"[fetch_config] SUCCESS: Cached config for {client_id}")
+        return cfg
+
+    except ReadTimeout:
+        print("[fetch_config] TIMEOUT: could not fetch remote config, falling back to local")
+
+    except RequestException as ex:
         print("[fetch_config] ERROR (http):", ex)
-    # Try local file fallback
+
+    # Local file fallback
+    local_path = os.path.join("configs", f"{client_id}.json")
     try:
-        with open(f"configs/{client_id}.json") as f:
+        with open(local_path, "r") as f:
             cfg = json.load(f)
             CONFIG_CACHE[client_id] = cfg
+            print(f"[fetch_config] LOADED LOCAL: {local_path}")
             return cfg
+
     except Exception as ex2:
         print("[fetch_config] ERROR (file):", ex2)
-        return {}
+
+    # If all else fails, return empty config
+    return {}
 
 def is_within_available_hours(dt: datetime.datetime, config: dict) -> bool:
     day_name = dt.strftime("%A").lower()
