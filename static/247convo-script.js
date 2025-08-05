@@ -143,7 +143,7 @@ if (langSelector) {
     }
     if (tooltip) tooltip.innerText = t("bubble");
     if (userInput) userInput.placeholder = t("input_placeholder");
-    if (sendBtn) sendBtn.textContent = t("send");
+    // if (sendBtn) sendBtn.textContent = t("send");
     getEl("quickOpts")?.remove();
     insertQuickOptions();
     if (tooltip && !(getEl("chatPopup")?.classList.contains("open"))) {
@@ -261,7 +261,7 @@ if (langSelector) {
     if (support) support.href = supportUrl;
     if (tooltip) tooltip.innerText = t("bubble");
     if (userInput) userInput.placeholder = t("input_placeholder");
-    if (sendBtn) sendBtn.textContent = t("send");
+    // if (sendBtn) sendBtn.textContent = t("send");
     if (support) support.textContent = t("support_link");
 
     setTimeout(() => {

@@ -256,12 +256,6 @@ body {
   transition: background 0.2s, outline 0.2s;
 }
 
-.send-icon {
-  width: 24px;
-  height: 24px;
-  fill: white;            /* makes the paper-plane white */
-  display: block;
-}
 
 .input-section button:hover,
 .input-section button:focus {
