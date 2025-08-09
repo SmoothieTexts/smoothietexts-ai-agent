@@ -389,7 +389,7 @@ if (langSelector) {
     }
 
     function botReply(text, isError = false) {
-      showMessage(`${chatbotName}: ${text}`, false, false, "", isError);
+      showMessage(`${text}`, false, false, "", isError);
       replySound?.play();
       setTimeout(() => userInput.focus(), 0);
     }
@@ -834,7 +834,7 @@ if (langSelector) {
           typeof data.answer === "string"
             ? linkify(stripTags(data.answer))
             : (data.answer ? JSON.stringify(data.answer, null, 2) : t("no_response") || "No response from bot.");
-        showMessage(`${chatbotName}: ${safeAnswer}`, false);
+        showMessage(`${safeAnswer}`, false);
         updateConversationHistory(txt, safeAnswer);
         if (replySound) replySound.play();
         chatLog += `${chatbotName}: ${safeAnswer}\n`;
