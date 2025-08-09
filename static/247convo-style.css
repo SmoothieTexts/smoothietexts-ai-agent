@@ -101,6 +101,7 @@ body {
   border-top-right-radius: 16px;
   gap: 10px;
   position: relative;
+line-height: 20px;
 }
 
 .close-btn {
