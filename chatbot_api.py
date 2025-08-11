@@ -142,7 +142,7 @@ def get_openai_client(client_id: str) -> OpenAI:
     return OpenAI(api_key=key)
 
 def get_embedding(text: str, client: OpenAI) -> List[float]:
-    return client.embeddings.create(model="text-embedding-ada-002", input=[text]).data[0].embedding
+    return client.embeddings.create(model="text-embedding-3-small", input=[text]).data[0].embedding
 
 def cosine(a: List[float], b: List[float]) -> float:
     a_arr, b_arr = np.array(a), np.array(b)

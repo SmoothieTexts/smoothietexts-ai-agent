@@ -15,7 +15,7 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
 # Set the client ID (this acts as both client_id and token)
-client_id = "smoothietexts"  # 🔁 Change this per client
+client_id = "therichjoe"  # 🔁 Change this per client
 
 # Load the knowledge base from the text file
 with open("knowledge.txt", "r", encoding="utf-8") as f:
