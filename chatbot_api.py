@@ -11,6 +11,7 @@ import ast
 import re
 import json
 import pytz
+import threading
 
 from typing import List
 from uuid import uuid4
@@ -44,7 +45,13 @@ TABLE_LOG       = os.getenv("SUPABASE_TABLE_NAME_LOG") or "client_conversations"
 GOOGLE_CLIENT_ID     = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 
-CONFIG_CACHE = {}   # <-- ADD THIS LINE RIGHT HERE!
+CONFIG_CACHE = {}
+CONFIG_CACHE_TIMES = {}
+
+CONFIG_TTL_SECONDS       = int(os.getenv("CONFIG_TTL_SECONDS", "300"))  # serve cached up to 5m
+CONFIG_FETCH_CONNECT_S   = float(os.getenv("CONFIG_FETCH_CONNECT_S", "2.0"))
+CONFIG_FETCH_READ_S      = float(os.getenv("CONFIG_FETCH_READ_S", "2.0"))
+CONFIG_MAX_RETRIES       = int(os.getenv("CONFIG_MAX_RETRIES", "1"))
 
 if not all([SUPABASE_URL, SUPABASE_KEY, API_TOKEN, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET]):
     raise RuntimeError("❌ Missing one or more required environment variables.")
@@ -66,58 +73,67 @@ from requests.adapters import HTTPAdapter
 from requests.exceptions import ReadTimeout, RequestException
 from urllib3.util.retry import Retry
 
-def fetch_config(client_id: str) -> dict:
-    # Return cached config if available
-    if client_id in CONFIG_CACHE:
-        return CONFIG_CACHE[client_id]
-
+def _fetch_remote_config(client_id: str) -> dict:
     url = f"{CONFIG_BASE}/{client_id}.json"
-    print(f"[fetch_config] FETCHING: {url}")
-
-    # Prepare a session with retry strategy
     session = requests.Session()
     retry_strategy = Retry(
-        total=3,                       # Retry up to 3 times
-        backoff_factor=1,              # Exponential backoff: 1s, 2s, 4s
-        status_forcelist=[500,502,503,504],
-        allowed_methods=["GET"]
+        total=CONFIG_MAX_RETRIES,
+        backoff_factor=0.5,
+        status_forcelist=[500, 502, 503, 504],
+        allowed_methods=["GET"],
     )
     adapter = HTTPAdapter(max_retries=retry_strategy)
     session.mount("https://", adapter)
     session.mount("http://", adapter)
 
+    # Short timeouts so we never block the chat
+    resp = session.get(url, timeout=(CONFIG_FETCH_CONNECT_S, CONFIG_FETCH_READ_S))
+    resp.raise_for_status()
+    return resp.json()
+
+def _refresh_config_background(client_id: str):
     try:
-        # Fetch remote config with a shorter timeout
-        resp = session.get(url, timeout=20)
-        print("[fetch_config] STATUS:", resp.status_code)
-        print("[fetch_config] RESPONSE:", resp.text[:250])
-        resp.raise_for_status()
-
-        cfg = resp.json()
+        cfg = _fetch_remote_config(client_id)
         CONFIG_CACHE[client_id] = cfg
-        print(f"[fetch_config] SUCCESS: Cached config for {client_id}")
-        return cfg
+        CONFIG_CACHE_TIMES[client_id] = time.time()
+        print(f"[fetch_config] background refresh OK for {client_id}")
+    except Exception as ex:
+        print(f"[fetch_config] background refresh failed: {ex}")
 
-    except ReadTimeout:
-        print("[fetch_config] TIMEOUT: could not fetch remote config, falling back to local")
+def fetch_config(client_id: str) -> dict:
+    # 1) Serve cached immediately (stale-while-revalidate)
+    now = time.time()
+    cached = CONFIG_CACHE.get(client_id)
+    ts = CONFIG_CACHE_TIMES.get(client_id, 0)
+    if cached:
+        if now - ts > CONFIG_TTL_SECONDS:
+            threading.Thread(target=_refresh_config_background, args=(client_id,), daemon=True).start()
+        return cached
 
-    except RequestException as ex:
-        print("[fetch_config] ERROR (http):", ex)
-
-    # Local file fallback
+    # 2) Try local file instantly (no network)
     local_path = os.path.join("configs", f"{client_id}.json")
     try:
         with open(local_path, "r") as f:
             cfg = json.load(f)
             CONFIG_CACHE[client_id] = cfg
-            print(f"[fetch_config] LOADED LOCAL: {local_path}")
+            CONFIG_CACHE_TIMES[client_id] = now
+            # Kick off a non-blocking remote refresh
+            threading.Thread(target=_refresh_config_background, args=(client_id,), daemon=True).start()
+            print(f"[fetch_config] LOADED LOCAL then refreshing remotely: {local_path}")
             return cfg
+    except Exception:
+        pass
 
-    except Exception as ex2:
-        print("[fetch_config] ERROR (file):", ex2)
-
-    # If all else fails, return empty config
-    return {}
+    # 3) Finally, remote fetch with short timeout (won’t stall the request)
+    try:
+        cfg = _fetch_remote_config(client_id)
+        CONFIG_CACHE[client_id] = cfg
+        CONFIG_CACHE_TIMES[client_id] = time.time()
+        print(f"[fetch_config] FETCHED REMOTE for {client_id}")
+        return cfg
+    except Exception as ex:
+        print(f"[fetch_config] remote fetch failed: {ex}")
+        return {}
 
 def is_within_available_hours(dt: datetime.datetime, config: dict) -> bool:
     day_name = dt.strftime("%A").lower()
