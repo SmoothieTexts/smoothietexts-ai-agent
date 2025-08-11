@@ -167,7 +167,7 @@ def cosine(a: List[float], b: List[float]) -> float:
     a_arr, b_arr = np.array(a), np.array(b)
     return float(np.dot(a_arr, b_arr) / (np.linalg.norm(a_arr)*np.linalg.norm(b_arr)))
 
-SIM_THRESHOLD = float(os.getenv("KB_SIM_THRESHOLD", "0.58"))
+SIM_THRESHOLD = float(os.getenv("KB_SIM_THRESHOLD", "0.30"))
 
 def fetch_top_k(q, client_id, openai_client, k: int = 5):
     q_emb = get_embedding(q, openai_client)                 # already floats from OpenAI
