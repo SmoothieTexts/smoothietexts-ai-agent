@@ -10,7 +10,7 @@ window.__247CONVO_CONFIG__ = {
   buttonColor: "#800080",
   textLight: "#f9f9f9",
   avatarUrl: "https://two47convo.onrender.com/avatar.png",
-  token: "smoothietexts",
+  token: "247convobot-2025",
   client_id: "smoothietexts",
   client_email: "jacksilva87@gmail.com",
   meetingDuration: "30",
