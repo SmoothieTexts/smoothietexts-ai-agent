@@ -142,27 +142,46 @@ def get_openai_client(client_id: str) -> OpenAI:
     return OpenAI(api_key=key)
 
 def get_embedding(text: str, client: OpenAI) -> List[float]:
-    return client.embeddings.create(model="text-embedding-3-small", input=[text]).data[0].embedding
+    return client.embeddings.create(
+        model="text-embedding-3-small",
+        input=text
+    ).data[0].embedding
 
 def cosine(a: List[float], b: List[float]) -> float:
     a_arr, b_arr = np.array(a), np.array(b)
     return float(np.dot(a_arr, b_arr) / (np.linalg.norm(a_arr)*np.linalg.norm(b_arr)))
 
-SIM_THRESHOLD = 0.60
+def fetch_top_k(q, client_id, openai_client, k: int = 5):
+    q_emb = get_embedding(q, openai_client)                 # already floats from OpenAI
+    q_emb = [float(x) for x in q_emb]                       # (optional) force to float
 
-def fetch_best_match(q, client_id, openai_client):
-    q_emb = get_embedding(q, openai_client)
-    rows = supabase.table(TABLE_KB).select("*").eq("client_id", client_id).execute().data or []
-    best, best_score = "", -1.0
+    resp = supabase.table(TABLE_KB) \
+        .select("id,content,embedding") \
+        .eq("client_id", client_id) \
+        .limit(2000) \
+        .execute()
+    rows = resp.data or []
+    if not rows:
+        print(f"[RAG] No KB rows for client_id={client_id}")
+
+    scored = []
     for r in rows:
         try:
+            # 1) turn stringified JSON -> list, or pass through list as-is
             emb = ast.literal_eval(r["embedding"]) if isinstance(r["embedding"], str) else r["embedding"]
-            sc = cosine(q_emb, emb)
-            if sc > best_score:
-                best, best_score = r["content"], sc
+            # 2) ensure pure floats (handles Decimal/str/etc.)
+            emb = [float(x) for x in emb]
+
+            s = cosine(q_emb, emb)
+            scored.append((s, r["content"]))
         except Exception as ex:
             print(f"[KB Embedding Error] Row: {r.get('id', '[no id]')} Exception: {ex}")
-    return best, best_score
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    top = [c for s, c in scored[:k]]
+    best = scored[0][0] if scored else -1.0
+    print(f"[RAG] client_id={client_id} rows={len(rows)} top1={best:.3f}")
+    return top, best
 
 def is_greeting(t: str) -> bool:
     return bool(re.search(r"\b(hi|hello|hey|howdy|good\s?(morning|afternoon|evening))\b", t.strip(), re.I))
@@ -216,7 +235,6 @@ def answer(user_q: str, client_id: str, cfg: dict, oa: OpenAI, history: list = N
             booking["date"] = None
             booking["time"] = None
     # ⬆️ END CANCELLATION BLOCK
-    ctx, score = fetch_best_match(user_q, client_id, oa)
     history = history or []
     booking = booking or {}
 
@@ -233,17 +251,23 @@ def answer(user_q: str, client_id: str, cfg: dict, oa: OpenAI, history: list = N
             "Would you like to continue your booking or start over? (Type 'continue' or 'start over')"
         )
 
-    if score >= SIM_THRESHOLD:
-        # If knowledge base match, just answer with KB context
-        prompt = f"Always reply ONLY in {lang}. You are {cfg.get('chatbotName','Chatbot')}. Answer using ONLY this knowledge:\n\n{ctx}\n\nQ: {user_q}\nA:"
+    contexts, best = fetch_top_k(user_q, client_id, oa, k=5)
+    context_block = "\n\n---\n".join(contexts)
+
+    if context_block:
+        messages = [
+            {"role": "system", "content": f"You are {cfg.get('chatbotName','Chatbot')}. Always reply ONLY in {lang}. Use the provided context. If the answer isn't in the context, say you don't know."},
+            {"role": "user",   "content": f"Context:\n{context_block}\n\nQuestion: {user_q}"}
+        ]
         res = oa.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}]
+            model="gpt-4o-mini",
+            messages=messages,
+            temperature=0.2
         )
         return res.choices[0].message.content.strip()
     if is_greeting(user_q):
         res = oa.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": f"Always reply ONLY in {lang}. You are {cfg.get('chatbotName','Chatbot')}."},
                 {"role": "user",   "content": user_q}
@@ -268,8 +292,9 @@ def answer(user_q: str, client_id: str, cfg: dict, oa: OpenAI, history: list = N
     prompt += f"User: {user_q}\nBot:"
     try:
         res = oa.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}]
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2
         )
         return res.choices[0].message.content.strip()
     except Exception:
@@ -686,7 +711,7 @@ def availability(client_id: str, date: str = Query(...), token: str = Query(""))
 
 
 @app.get("/availability/{client_id}/busy")
-def availability_busy(client_id: str, date: str = Query(...)):
+def availability_busy(client_id: str, date: str = Query(...), token: str = Query("")):
     if token != API_TOKEN:
         raise HTTPException(401, "Bad token")
     cfg = fetch_config(client_id)
