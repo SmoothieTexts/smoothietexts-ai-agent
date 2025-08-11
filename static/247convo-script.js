@@ -850,7 +850,8 @@ if (langSelector) {
 
     window.quickAsk = txt => {
       getEl("quickOpts")?.remove();
-      if (txt === quickOption1) return startBookingFlow();
+  // REMOVE THIS LINE:
+  // if (txt === quickOption1) return startBookingFlow();
       userInput.value = txt;
       handleInput();
     };
