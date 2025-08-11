@@ -148,23 +148,57 @@ def get_embedding(text: str, client: OpenAI) -> List[float]:
     ).data[0].embedding
 
 def cosine(a: List[float], b: List[float]) -> float:
-    a_arr, b_arr = np.array(a), np.array(b)
-    return float(np.dot(a_arr, b_arr) / (np.linalg.norm(a_arr)*np.linalg.norm(b_arr)))
+    a_arr = np.array(a, dtype=np.float32)
+    b_arr = np.array(b, dtype=np.float32)
+    denom = np.linalg.norm(a_arr) * np.linalg.norm(b_arr)
+    if denom == 0.0:
+        return 0.0
+    return float(np.dot(a_arr, b_arr) / denom)
+
+# Normalize any stored embedding (jsonb, text, Decimal, numpy) -> clean list[float]
+def _to_float_list(vec):
+    if vec is None:
+        return []
+    if isinstance(vec, str):
+        # Try JSON first (fast), fall back to Python literal (handles tuples)
+        try:
+            vec = json.loads(vec)
+        except json.JSONDecodeError:
+            vec = ast.literal_eval(vec)
+    if isinstance(vec, np.ndarray):
+        vec = vec.tolist()
+    # Cast anything (Decimal/np types/strings/ints) to plain float
+    return [float(x) for x in vec]
 
 SIM_THRESHOLD = 0.60
 
 def fetch_best_match(q, client_id, openai_client):
-    q_emb = get_embedding(q, openai_client)
-    rows = supabase.table(TABLE_KB).select("*").eq("client_id", client_id).execute().data or []
+    q_emb = _to_float_list(get_embedding(q, openai_client))
+
+    rows = (
+        supabase.table(TABLE_KB)
+        .select("id,content,embedding")
+        .eq("client_id", client_id)
+        .limit(2000)
+        .execute()
+        .data
+        or []
+    )
+
     best, best_score = "", -1.0
     for r in rows:
         try:
-            emb = ast.literal_eval(r["embedding"]) if isinstance(r["embedding"], str) else r["embedding"]
+            emb = _to_float_list(r.get("embedding"))
+            if not emb:  # guard for empty/malformed rows
+                print(f"[KB Embedding Warning] Empty embedding for row id={r.get('id')}")
+                continue
+
             sc = cosine(q_emb, emb)
             if sc > best_score:
-                best, best_score = r["content"], sc
+                best, best_score = r.get("content", ""), sc
         except Exception as ex:
             print(f"[KB Embedding Error] Row: {r.get('id', '[no id]')} Exception: {ex}")
+
     return best, best_score
 
 def is_greeting(t: str) -> bool:
