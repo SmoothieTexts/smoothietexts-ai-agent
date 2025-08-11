@@ -148,58 +148,42 @@ def get_embedding(text: str, client: OpenAI) -> List[float]:
     ).data[0].embedding
 
 def cosine(a: List[float], b: List[float]) -> float:
-    a_arr = np.array(a, dtype=np.float32)
-    b_arr = np.array(b, dtype=np.float32)
-    denom = np.linalg.norm(a_arr) * np.linalg.norm(b_arr)
-    if denom == 0.0:
-        return 0.0
-    return float(np.dot(a_arr, b_arr) / denom)
+    a_arr, b_arr = np.array(a), np.array(b)
+    return float(np.dot(a_arr, b_arr) / (np.linalg.norm(a_arr)*np.linalg.norm(b_arr)))
 
-# Normalize any stored embedding (jsonb, text, Decimal, numpy) -> clean list[float]
-def _to_float_list(vec):
-    if vec is None:
-        return []
-    if isinstance(vec, str):
-        # Try JSON first (fast), fall back to Python literal (handles tuples)
-        try:
-            vec = json.loads(vec)
-        except json.JSONDecodeError:
-            vec = ast.literal_eval(vec)
-    if isinstance(vec, np.ndarray):
-        vec = vec.tolist()
-    # Cast anything (Decimal/np types/strings/ints) to plain float
-    return [float(x) for x in vec]
+SIM_THRESHOLD = float(os.getenv("KB_SIM_THRESHOLD", "0.58"))
 
-SIM_THRESHOLD = 0.60
+def fetch_top_k(q, client_id, openai_client, k: int = 5):
+    q_emb = get_embedding(q, openai_client)                 # already floats from OpenAI
+    q_emb = [float(x) for x in q_emb]                       # (optional) force to float
 
-def fetch_best_match(q, client_id, openai_client):
-    q_emb = _to_float_list(get_embedding(q, openai_client))
-
-    rows = (
-        supabase.table(TABLE_KB)
-        .select("id,content,embedding")
-        .eq("client_id", client_id)
-        .limit(2000)
+    resp = supabase.table(TABLE_KB) \
+        .select("id,content,embedding") \
+        .eq("client_id", client_id) \
+        .limit(2000) \
         .execute()
-        .data
-        or []
-    )
+    rows = resp.data or []
+    if not rows:
+        print(f"[RAG] No KB rows for client_id={client_id}")
 
-    best, best_score = "", -1.0
+    scored = []
     for r in rows:
         try:
-            emb = _to_float_list(r.get("embedding"))
-            if not emb:  # guard for empty/malformed rows
-                print(f"[KB Embedding Warning] Empty embedding for row id={r.get('id')}")
-                continue
+            # 1) turn stringified JSON -> list, or pass through list as-is
+            emb = ast.literal_eval(r["embedding"]) if isinstance(r["embedding"], str) else r["embedding"]
+            # 2) ensure pure floats (handles Decimal/str/etc.)
+            emb = [float(x) for x in emb]
 
-            sc = cosine(q_emb, emb)
-            if sc > best_score:
-                best, best_score = r.get("content", ""), sc
+            s = cosine(q_emb, emb)
+            scored.append((s, r["content"]))
         except Exception as ex:
             print(f"[KB Embedding Error] Row: {r.get('id', '[no id]')} Exception: {ex}")
 
-    return best, best_score
+    scored.sort(key=lambda x: x[0], reverse=True)
+    top = [c for s, c in scored[:k]]
+    best = scored[0][0] if scored else -1.0
+    print(f"[RAG] client_id={client_id} rows={len(rows)} top1={best:.3f}")
+    return top, best
 
 def is_greeting(t: str) -> bool:
     return bool(re.search(r"\b(hi|hello|hey|howdy|good\s?(morning|afternoon|evening))\b", t.strip(), re.I))
@@ -216,6 +200,17 @@ def rate_limited(ip: str) -> bool:
         return True
     bucket.append(now_ts)
     return False
+
+def build_system_prompt(cfg: dict, lang: str) -> str:
+    return (
+        f"You are {cfg.get('chatbotName', 'Chatbot')}.\n"
+        f"Always reply ONLY in {lang}.\n"
+        "Conversation policy:\n"
+        "- If the user message is greeting, small talk, acknowledgement, or otherwise casual, reply briefly and warmly. Do NOT say “I don’t know”.\n"
+        "- Use provided business context ONLY when it’s directly relevant. Do not invent business facts.\n"
+        "- If the user asks a business-specific question and the necessary info is not in the context, say you don’t know and offer a concise clarifying question or to check.\n"
+        "- Keep answers concise and helpful."
+    )
 
 def answer(user_q: str, client_id: str, cfg: dict, oa: OpenAI, history: list = None, booking: dict = None, lang: str = "en") -> str:
     # Cancellation handling block - always keep this as the FIRST thing!
@@ -253,7 +248,6 @@ def answer(user_q: str, client_id: str, cfg: dict, oa: OpenAI, history: list = N
             booking["date"] = None
             booking["time"] = None
     # ⬆️ END CANCELLATION BLOCK
-    ctx, score = fetch_best_match(user_q, client_id, oa)
     history = history or []
     booking = booking or {}
 
@@ -270,15 +264,21 @@ def answer(user_q: str, client_id: str, cfg: dict, oa: OpenAI, history: list = N
             "Would you like to continue your booking or start over? (Type 'continue' or 'start over')"
         )
 
-    if score >= SIM_THRESHOLD:
-        # If knowledge base match, just answer with KB context
-        prompt = f"Always reply ONLY in {lang}. You are {cfg.get('chatbotName','Chatbot')}. Answer using ONLY this knowledge:\n\n{ctx}\n\nQ: {user_q}\nA:"
+    contexts, best = fetch_top_k(user_q, client_id, oa, k=5)
+    context_block = "\n\n---\n".join(contexts)
+
+    if best >= SIM_THRESHOLD and context_block:
+        messages = [
+            {"role": "system", "content": build_system_prompt(cfg, lang)},
+            {"role": "user", "content": f"Business context:\n{context_block}\n\nQuestion: {user_q}"}
+        ]
         res = oa.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}],
+            messages=messages,
             temperature=0.2
         )
         return res.choices[0].message.content.strip()
+
     if is_greeting(user_q):
         res = oa.chat.completions.create(
             model="gpt-4o-mini",
@@ -298,17 +298,22 @@ def answer(user_q: str, client_id: str, cfg: dict, oa: OpenAI, history: list = N
             f"{booking.get('time', 'unknown time')}. Respond accordingly.\n"
         )
 
-    prompt = f"Always reply ONLY in {lang}.\n" + booking_context
+    messages = [{"role": "system", "content": build_system_prompt(cfg, lang) + ("\n" + booking_context if booking_context else "")}]
+
+    # give the model a bit of conversational memory:
     for turn in (history[-5:] if len(history) > 5 else history):
-        user = turn.get("user", "")
-        bot  = turn.get("bot", "")
-        prompt += f"User: {user}\nBot: {bot}\n"
-    prompt += f"User: {user_q}\nBot:"
+        if turn.get("user"):
+            messages.append({"role": "user", "content": turn["user"]})
+        if turn.get("bot"):
+            messages.append({"role": "assistant", "content": turn["bot"]})
+
+    messages.append({"role": "user", "content": user_q})
+
     try:
         res = oa.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.2
+            messages=messages,
+            temperature=0.25  # a touch more natural, still controlled
         )
         return res.choices[0].message.content.strip()
     except Exception:
