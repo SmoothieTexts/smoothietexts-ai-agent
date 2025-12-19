@@ -3,7 +3,7 @@
 window.__247CONVO_CONFIG__ = {
   chatbotName: "Mr. Smoothie",
   brandName: "SmoothieTexts",
-  supportUrl: "https://smoothietexts.com",
+  supportUrl: "tel:+16032646845",
   primaryColor: "#1d5e79",
   accentColor: "#800080",
   lightAccent: "#d9b3ff",
