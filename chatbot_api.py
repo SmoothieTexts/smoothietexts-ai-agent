@@ -882,20 +882,65 @@ async def get_config_file(client_id: str):
 
 @app.get("/static/{path:path}")
 async def static_file(path: str):
-    from pathlib import Path
-
-    if ".." in path or path.startswith("/"):
+    # ✅ Security: block traversal and absolute paths
+    if ".." in path or path.startswith("/") or path.startswith("\\"):
         raise HTTPException(400, {"error": "Invalid file path"})
+
     fp = os.path.join("static", path)
-    if not os.path.exists(fp):
+
+    # ✅ If file doesn't exist
+    if not os.path.exists(fp) or not os.path.isfile(fp):
         raise HTTPException(404, {"error": "Not found"})
+
+    # ✅ Choose proper MIME type
+    ext = os.path.splitext(fp)[1].lower()
+
+    if ext == ".html":
+        mt = "text/html; charset=utf-8"
+    elif ext == ".js":
+        mt = "application/javascript; charset=utf-8"
+    elif ext == ".css":
+        mt = "text/css; charset=utf-8"
+    elif ext == ".json":
+        mt = "application/json; charset=utf-8"
+    elif ext == ".svg":
+        mt = "image/svg+xml"
+    elif ext == ".png":
+        mt = "image/png"
+    elif ext in [".jpg", ".jpeg"]:
+        mt = "image/jpeg"
+    elif ext == ".webp":
+        mt = "image/webp"
+    elif ext == ".ico":
+        mt = "image/x-icon"
+    elif ext == ".txt":
+        mt = "text/plain; charset=utf-8"
+    elif ext == ".woff":
+        mt = "font/woff"
+    elif ext == ".woff2":
+        mt = "font/woff2"
+    elif ext == ".ttf":
+        mt = "font/ttf"
+    elif ext == ".otf":
+        mt = "font/otf"
+    elif ext == ".eot":
+        mt = "application/vnd.ms-fontobject"
+    else:
+        # fallback (fonts, etc.)
+        mt = "application/octet-stream"
+
+    # ✅ Read file and serve
     with open(fp, "rb") as f:
         data = f.read()
-    mt = "text/html" if fp.endswith(".html") else "application/octet-stream"
+
     return Response(
         content=data,
         media_type=mt,
-        headers={"Access-Control-Allow-Origin": "*"}
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            # Optional: helps caching static assets (safe for versioned files)
+            "Cache-Control": "public, max-age=00"3
+        }
     )
 
 @app.get("/health")

@@ -247,6 +247,8 @@ if (langSelector) {
     let collecting    = "name";
     let bookingState  = { inProgress: false, date: null, time: null };
     let bookingInProgress = false;
+    let conversationStarted = false;
+
 
 
 // ---- Keep-alive (only while chat open) ----
@@ -271,18 +273,31 @@ function stopKeepAlive() {
 
 
 // ✅ Session ID so we update the same Supabase row during this chat session
-const session_id = (() => {
-  const key = `__247convo_session_${client_id}`;
-  let s = sessionStorage.getItem(key);
-  if (!s) {
-    s = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    sessionStorage.setItem(key, s);
+// ✅ NEW session per conversation (not per tab)
+let session_id = null;
+
+function newSessionId() {
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+// Start first session when widget loads (or you can start on open)
+session_id = null; // will be set when a conversation starts
+function startNewConversation() {
+  session_id = newSessionId();
+  chatLog = "";
+  conversationHistory = [];
+  conversationStarted = true;
+
+  // ✅ If lead already exists, prepend it so every session log includes it
+  if (leadSubmitted && userName && userEmail) {
+    chatLog += `Name: ${userName}\n`;
+    chatLog += `Email: ${userEmail}\n`;
   }
-  return s;
-})();
+}
 
 // ✅ Debounced progressive saver (won't spam your backend)
 let saveTimer = null;
+let saveInFlight = false;
 
 function scheduleSaveChatLog() {
   if (!leadSubmitted || !chatLog.trim()) return;
@@ -291,13 +306,17 @@ function scheduleSaveChatLog() {
 }
 
 async function saveChatLogNow() {
+  if (!session_id) return;
   if (!leadSubmitted || !chatLog.trim()) return;
+  if (!token || !client_id) return;
+
+  if (saveInFlight) return;
+  saveInFlight = true;
 
   try {
     await fetch(`${API_BASE}/log`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      // keepalive helps on tab close/page exit (supported on modern browsers)
       keepalive: true,
       body: JSON.stringify({
         token,
@@ -309,8 +328,9 @@ async function saveChatLogNow() {
       })
     });
   } catch (e) {
-    // Silent fail (don't disrupt chat UX)
     console.warn("[autosave] failed:", e);
+  } finally {
+    saveInFlight = false;
   }
 }
 
@@ -367,7 +387,7 @@ async function saveChatLogNow() {
       const hour = new Date().getHours();
       if (hour >= 12 && hour < 18) greet = t("greeting_afternoon");
       if (hour >= 18) greet = t("greeting_evening");
-      if (userName) greet += ` ${userName}`;
+      if (userName) greet += ` ${escapeHTML(userName)}`;
       return greet;
     }
 
@@ -753,9 +773,10 @@ async function saveChatLogNow() {
       console.log("Input received:", txt, "bookingInProgress:", bookingInProgress);
 
       if (!txt) return;
+      if (!conversationStarted) startNewConversation();
       sendBtn.disabled = true;
 
-      showMessage(txt, true);
+      showMessage(escapeHTML(txt), true);
       userInput.value = "";
 
       if (bookingInProgress) {
@@ -794,35 +815,45 @@ async function saveChatLogNow() {
       }
 
       // **Lead capture: Name then Email**
-      if (!leadSubmitted) {
-        if (collecting === "name") {
-          // Extract and store only the person’s name
-          const rawName = extractName(txt);
-          userName = rawName.slice(0, 100);
-          collecting = "email";
-          enableInput();
-          return botReply(`${getPersonalizedGreeting()} ${t("ask_email")}`);
-        } else if (collecting === "email") {
-          // Extract and store only the email address
-          const rawEmail = extractEmail(txt);
-          userEmail = rawEmail.slice(0, 100);
-          // Validate email format
-          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userEmail)) {
-            botReply(t("error_email"), true);
-            enableInput();
-            return;
-          }
-          leadSubmitted = true;
-          collecting = "done";
-          enableInput();
-          botReply(
-            (t("lead_thanks") || "✅ Thanks, {name}! I’m {bot}. How can I help?")
-              .replace("{name}", userName)
-              .replace("{bot}", chatbotName)
-          );
-          return insertQuickOptions();
-        }
-      }
+// **Lead capture: Name then Email**
+if (!leadSubmitted) {
+  if (collecting === "name") {
+    const rawName = extractName(txt);
+    userName = rawName.slice(0, 100);
+
+    // store name in chat log (no save yet)
+    chatLog += `Name: ${userName}\n`;
+
+    collecting = "email";
+    enableInput();
+    return botReply(`${getPersonalizedGreeting()} ${t("ask_email")}`);
+  } 
+  else if (collecting === "email") {
+    const rawEmail = extractEmail(txt);
+    userEmail = rawEmail.slice(0, 100);
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userEmail)) {
+      botReply(t("error_email"), true);
+      enableInput();
+      return;
+    }
+
+    leadSubmitted = true;
+
+    // store email in chat log then save the whole thing (name + email)
+    chatLog += `Email: ${userEmail}\n`;
+    scheduleSaveChatLog();
+
+    collecting = "done";
+    enableInput();
+    botReply(
+      (t("lead_thanks") || "✅ Thanks, {name}! I’m {bot}. How can I help?")
+        .replace("{name}", escapeHTML(userName))
+        .replace("{bot}", chatbotName)
+    );
+    return insertQuickOptions();
+  }
+}
 
       if (leadSubmitted) {
         if (
@@ -851,11 +882,20 @@ async function saveChatLogNow() {
       sendBtn.disabled = false;
     }
 
-    function stripTags(str) {
-      const div = document.createElement('div');
-      div.innerHTML = str;
-      return div.textContent || div.innerText || "";
-    }
+function escapeHTML(s) {
+  return String(s)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function stripTags(str) {
+  const div = document.createElement('div');
+  div.innerHTML = str;
+  return div.textContent || div.innerText || "";
+}
 
     async function sendMessage(txt) {
       const id = `msg-${Date.now()}`;
@@ -863,11 +903,12 @@ async function saveChatLogNow() {
       chatLog += `You: ${txt}\n`;
       scheduleSaveChatLog();
 
-      if (!token) {
-        const errEl = getEl(id);
-        if (errEl) errEl.innerText = "❌ Missing token";
-        return;
-      }
+if (!token) {
+  const errEl = getEl(id);
+  if (errEl) errEl.innerText = "❌ Missing token";
+  enableInput();
+  return;
+}
 
       try {
         const res = await fetchWithTimeout(`${API_BASE}/chat`, {
@@ -935,18 +976,41 @@ window.toggleChat = () => {
   hideBadge();
   t.style.display = isOpen ? "block" : "none";
 
-  if (!isOpen) {
-    // Chat is OPENING
-    startKeepAlive();
+if (!isOpen) {
+  // Chat is OPENING
+  startKeepAlive();
 
-    if (bubbleSound) bubbleSound.play();
-    if (!leadSubmitted) botReply(getPersonalizedGreeting() + " " + (config.greetingIntro || "What’s your name?"));
-    enableInput();
-  } else {
-    // Chat is CLOSING
-    stopKeepAlive();
-  }
-};
+  // ✅ If this is a fresh start (no messages yet), start a new conversation row
+if (!conversationStarted) {
+  startNewConversation();
+}
+
+if (bubbleSound) bubbleSound.play();
+
+if (!leadSubmitted) {
+  botReply(getPersonalizedGreeting() + " " + (config.greetingIntro || "What’s your name?"));
+} else {
+  botReply(getPersonalizedGreeting() + " " + (t("lead_welcome_back") || "Welcome back — how can I help?"));
+}
+
+enableInput();
+
+} else {
+  stopKeepAlive();
+  saveChatLogNow();
+// ✅ If lead was NOT completed, reset lead capture state so flow is clean next time
+if (!leadSubmitted) {
+  userName = "";
+  userEmail = "";
+  collecting = "name";
+}
+  chatLog = "";
+  conversationHistory = [];
+  conversationStarted = false; // ✅ reset
+  session_id = null; // ✅ ADD THIS
+}
+
+}; // ✅ CLOSE window.toggleChat properly
 
 
     bubble?.addEventListener("click", window.toggleChat);
