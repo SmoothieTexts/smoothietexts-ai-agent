@@ -248,6 +248,28 @@ if (langSelector) {
     let bookingState  = { inProgress: false, date: null, time: null };
     let bookingInProgress = false;
 
+
+// ---- Keep-alive (only while chat open) ----
+let keepAliveTimer = null;
+
+function startKeepAlive() {
+  if (keepAliveTimer) return;
+
+  // optional: ping once immediately when chat opens
+  fetch(`${API_BASE}/health`, { method: "GET", cache: "no-store" }).catch(() => {});
+
+  keepAliveTimer = setInterval(() => {
+    fetch(`${API_BASE}/health`, { method: "GET", cache: "no-store" }).catch(() => {});
+  }, 10 * 60 * 1000); // 10 minutes
+}
+
+function stopKeepAlive() {
+  if (!keepAliveTimer) return;
+  clearInterval(keepAliveTimer);
+  keepAliveTimer = null;
+}
+
+
 // ✅ Session ID so we update the same Supabase row during this chat session
 const session_id = (() => {
   const key = `__247convo_session_${client_id}`;
@@ -931,9 +953,10 @@ window.toggleChat = () => {
     sendBtn?.addEventListener("click", handleInput);
     userInput?.addEventListener("keydown", e => { if (e.key === "Enter") handleInput(); });
 
-    window.addEventListener("beforeunload", () => {
-      saveChatLogNow();
-    });
+window.addEventListener("beforeunload", () => {
+  saveChatLogNow();
+  stopKeepAlive();
+});
 
 // ✅ More reliable than beforeunload on mobile/Safari
 document.addEventListener("visibilitychange", () => {
@@ -950,6 +973,7 @@ document.addEventListener("visibilitychange", () => {
 
 window.addEventListener("pagehide", () => {
   saveChatLogNow();
+  stopKeepAlive();
 });
 
     let played = false;
