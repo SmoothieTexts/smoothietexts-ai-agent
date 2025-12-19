@@ -828,7 +828,7 @@ async def log_chat(req: Request):
             "email": email,
             "chat_log": chat_log,
             "timestamp": datetime.datetime.utcnow().isoformat()
-        }, on_conflict="client_id,session_id").execute()
+        }, on_conflict="session_id").execute()
 
         return {"status": "saved", "session_id": session_id}
 
