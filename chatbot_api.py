@@ -803,6 +803,40 @@ async def summary(req: Request):
         print(f"[Supabase Log Insert Error] {ex}")
         return JSONResponse({"error": "Could not save log"}, status_code=500)
 
+
+@app.post("/log")
+async def log_chat(req: Request):
+    p = await req.json()
+    if p.get("token") != API_TOKEN:
+        raise HTTPException(401, "Bad token")
+
+    cid = p.get("client_id")
+    session_id = p.get("session_id")
+    name = p.get("name", "")
+    email = p.get("email", "")
+    chat_log = p.get("chat_log", "")
+
+    if not cid or not session_id:
+        raise HTTPException(400, {"error": "Missing client_id or session_id"})
+
+    try:
+        # ✅ UPSERT by session_id so we keep updating ONE row as chat continues
+        supabase.table(TABLE_LOG).upsert({
+            "session_id": session_id,
+            "client_id": cid,
+            "name": name,
+            "email": email,
+            "chat_log": chat_log,
+            "timestamp": datetime.datetime.utcnow().isoformat()
+        }, on_conflict="client_id,session_id").execute()
+
+        return {"status": "saved", "session_id": session_id}
+
+    except Exception as ex:
+        print(f"[Supabase Log Upsert Error] {ex}")
+        return JSONResponse({"error": "Could not save log"}, status_code=500)
+
+
 @app.post("/rating")
 async def rating(req: Request):
     p = await req.json()

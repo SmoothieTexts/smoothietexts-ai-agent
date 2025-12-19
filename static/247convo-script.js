@@ -248,6 +248,50 @@ if (langSelector) {
     let bookingState  = { inProgress: false, date: null, time: null };
     let bookingInProgress = false;
 
+// ✅ Session ID so we update the same Supabase row during this chat session
+const session_id = (() => {
+  const key = `__247convo_session_${client_id}`;
+  let s = sessionStorage.getItem(key);
+  if (!s) {
+    s = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    sessionStorage.setItem(key, s);
+  }
+  return s;
+})();
+
+// ✅ Debounced progressive saver (won't spam your backend)
+let saveTimer = null;
+
+function scheduleSaveChatLog() {
+  if (!leadSubmitted || !chatLog.trim()) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveChatLogNow, 1200); // save ~1.2s after activity
+}
+
+async function saveChatLogNow() {
+  if (!leadSubmitted || !chatLog.trim()) return;
+
+  try {
+    await fetch(`${API_BASE}/log`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      // keepalive helps on tab close/page exit (supported on modern browsers)
+      keepalive: true,
+      body: JSON.stringify({
+        token,
+        client_id,
+        session_id,
+        name: userName,
+        email: userEmail,
+        chat_log: chatLog
+      })
+    });
+  } catch (e) {
+    // Silent fail (don't disrupt chat UX)
+    console.warn("[autosave] failed:", e);
+  }
+}
+
     let conversationHistory = [];
     function updateConversationHistory(user, bot) {
       conversationHistory.push({ user, bot });
@@ -280,7 +324,7 @@ if (langSelector) {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 client_id,
-                user: userName || "",
+                name: userName || "",
                 email: userEmail || "",
                 score,
                 context: conversationHistory,
@@ -795,6 +839,7 @@ if (langSelector) {
       const id = `msg-${Date.now()}`;
       showMessage("<em>Loading...</em>", false, true, id);
       chatLog += `You: ${txt}\n`;
+      scheduleSaveChatLog();
 
       if (!token) {
         const errEl = getEl(id);
@@ -838,6 +883,7 @@ if (langSelector) {
         updateConversationHistory(txt, safeAnswer);
         if (replySound) replySound.play();
         chatLog += `${chatbotName}: ${safeAnswer}\n`;
+        scheduleSaveChatLog();
 
       } catch (e) {
         const errEl = getEl(id);
@@ -876,14 +922,17 @@ if (langSelector) {
     userInput?.addEventListener("keydown", e => { if (e.key === "Enter") handleInput(); });
 
     window.addEventListener("beforeunload", () => {
-      if (leadSubmitted && chatLog.trim()) {
-        fetch(`${API_BASE}/summary`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: userName, email: userEmail, chat_log: chatLog, token, client_id }),
-        }).catch(() => {});
-      }
+      saveChatLogNow();
     });
+
+// ✅ More reliable than beforeunload on mobile/Safari
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") saveChatLogNow();
+});
+
+window.addEventListener("pagehide", () => {
+  saveChatLogNow();
+});
 
     let played = false;
     const playOnce = () => {
