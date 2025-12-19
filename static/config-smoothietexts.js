@@ -1,4 +1,4 @@
-// File: static/config–therichjoe.js
+// File: static/config–smoothietexts.js
 
 window.__247CONVO_CONFIG__ = {
   chatbotName: "Mr. Smoothie",
@@ -26,7 +26,7 @@ window.__247CONVO_CONFIG__ = {
   memoryLimit: 5,
   handoff: {
     intro: "Connecting you to a human agent...",
-    whatsapp: "<a href='https://wa.me/234XXXXXXXXXX'>Chat with us on WhatsApp</a>"
+    whatsapp: "<a href='https://wa.me/+16032646845'>Chat with us on WhatsApp</a>"
   },
   // =========== MULTI-LANGUAGE PACK =============
   // ...everything above stays the same...
@@ -77,7 +77,7 @@ lang_pack: {
 
     // --- Handoff/Human agent ---
     handoff_intro: "Connecting you to a human agent...",
-    handoff_whatsapp: "<a href='https://wa.me/234XXXXXXXXXX'>Chat with us on WhatsApp</a>",
+    handoff_whatsapp: "<a href='https://wa.me/+16032646845'>Chat with us on WhatsApp</a>",
 
     // --- UI Labels ---
     send: "Send",
@@ -134,7 +134,7 @@ lang_pack: {
     rating_thanks: "Merci pour vos commentaires !",
     rating_error: "⚠️ Impossible d'envoyer votre note.",
     handoff_intro: "Nous vous mettons en relation avec un agent humain...",
-    handoff_whatsapp: "<a href='https://wa.me/234XXXXXXXXXX'>Discutez avec nous sur WhatsApp</a>",
+    handoff_whatsapp: "<a href='https://wa.me/+16032646845'>Discutez avec nous sur WhatsApp</a>",
     send: "Envoyer",
     input_placeholder: "Tapez votre message…",
     support_link: "📞 Besoin d'aide ? Contactez le support",
@@ -186,7 +186,7 @@ lang_pack: {
     rating_thanks: "¡Gracias por tus comentarios!",
     rating_error: "⚠️ No se pudo enviar tu calificación.",
     handoff_intro: "Conectándote con un agente humano...",
-    handoff_whatsapp: "<a href='https://wa.me/234XXXXXXXXXX'>Chatea con nosotros en WhatsApp</a>",
+    handoff_whatsapp: "<a href='https://wa.me/+16032646845'>Chatea con nosotros en WhatsApp</a>",
     send: "Enviar",
     input_placeholder: "Escribe tu mensaje…",
     support_link: "📞 ¿Necesitas más ayuda? Contacta soporte",
