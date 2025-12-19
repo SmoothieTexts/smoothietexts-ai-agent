@@ -939,7 +939,7 @@ async def static_file(path: str):
         headers={
             "Access-Control-Allow-Origin": "*",
             # Optional: helps caching static assets (safe for versioned files)
-            "Cache-Control": "public, max-age=00"3
+            "Cache-Control": "public, max-age=300"
         }
     )
 
