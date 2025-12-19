@@ -902,20 +902,30 @@ async function saveChatLogNow() {
       handleInput();
     };
 
-    window.toggleChat = () => {
-      const p = getEl("chatPopup"), t = getEl("chat-bubble-msg");
-      if (!p || !t) return;
-      const open = p.classList.contains("open");
-      p.classList.toggle("open", !open);
-      pulseBubble(false);
-      hideBadge();
-      t.style.display = open ? "block" : "none";
-      if (!open) {
-        if (bubbleSound) bubbleSound.play();
-        if (!leadSubmitted) botReply(getPersonalizedGreeting() + " " + (config.greetingIntro || "What’s your name?"));
-        enableInput();
-      }
-    };
+window.toggleChat = () => {
+  const p = getEl("chatPopup"), t = getEl("chat-bubble-msg");
+  if (!p || !t) return;
+
+  const isOpen = p.classList.contains("open");
+  p.classList.toggle("open", !isOpen);
+
+  pulseBubble(false);
+  hideBadge();
+  t.style.display = isOpen ? "block" : "none";
+
+  if (!isOpen) {
+    // Chat is OPENING
+    startKeepAlive();
+
+    if (bubbleSound) bubbleSound.play();
+    if (!leadSubmitted) botReply(getPersonalizedGreeting() + " " + (config.greetingIntro || "What’s your name?"));
+    enableInput();
+  } else {
+    // Chat is CLOSING
+    stopKeepAlive();
+  }
+};
+
 
     bubble?.addEventListener("click", window.toggleChat);
     sendBtn?.addEventListener("click", handleInput);
@@ -927,8 +937,16 @@ async function saveChatLogNow() {
 
 // ✅ More reliable than beforeunload on mobile/Safari
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "hidden") saveChatLogNow();
+  if (document.visibilityState === "hidden") {
+    saveChatLogNow();
+    stopKeepAlive();
+  } else {
+    // If chat is open again, resume keep-alive
+    const popup = getEl("chatPopup");
+    if (popup && popup.classList.contains("open")) startKeepAlive();
+  }
 });
+
 
 window.addEventListener("pagehide", () => {
   saveChatLogNow();
